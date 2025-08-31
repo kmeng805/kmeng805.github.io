@@ -1,0 +1,48 @@
+.proj0-main {
+   background-image: linear-gradient(rgb(197, 238, 255), rgb(81, 190, 249));
+   margin-bottom: 500px;
+   align-items: center;
+   text-align: center;
+}
+
+.title { 
+   font-family: Georgia, 'Times New Roman', Times, serif;
+   font-weight: 100;
+   font-size: 30px;
+   padding-top: 45px;
+   color: black;
+}
+
+.header {
+    padding-bottom: 10px;
+    padding-top: 20px;
+    align-items: center;
+    font-family: Cambria, Cochin, Georgia, Times, 'Times New Roman', serif;
+    color: darkblue;
+    font-weight: bold;
+    text-align: center;
+    font-size: 23px;
+}
+
+.note {
+    font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
+    font-size: 12px;
+}
+
+.img-desc {
+    font-family: Georgia, 'Times New Roman', Times, serif;
+    font-size: 16px;
+    color: black;
+}
+
+.img-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+img {
+    margin: 20px;
+    border: 2px solid black;
+    display: flex;
+}
