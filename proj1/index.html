@@ -17,7 +17,7 @@
       <li><a href="#part2">Naive Approach</a></li>
       <li><a href="#part3">Improvement: Metrics + Trimming</a>
         <ul>
-            <li><a href="#part3a">L2 (Euclidean) Normalization</a></li>
+            <li><a href="#part3a">L2 Norm</a></li>
             <li><a href="#part3b">Normalized Cross-Correlation (NCC)</a></li>
             <li><a href="#part33">Trimming</a></li>
         </ul>
@@ -89,12 +89,13 @@
         <a href="https://numpy.org/doc/2.0/reference/generated/numpy.roll.html"><code>np.roll</code></a>, and 
         stacked the shifted three images to get our final output.
     </p>
-    <h3 id="part3a">Metric 1: L2 (Euclidean) Normalization</h2>
+    <h3 id="part3a">Metric 1: L2 Norm</h2>
     <div>
-        <p>One metric we used was L2 normalization, also known as Euclidean normalization 
+        <p>One metric we used was L2 norm, also known as Euclidean distance 
             (sqrt ommitted):
         </p>
         <img src="img/l2.png" width="50%" alt="L2" style="display: block; margin: 0 auto;">
+        <p>Euclidean normalization </p>
         <p>To make our metric even stronger, we switched to normalized cross-correlation:
         </p>
     </div>
@@ -406,7 +407,7 @@
         </div>
     </div>
     <p>Looking at the color channels provided for the Emir of Bukhara, we notice that 
-        they look quite different from each other. For example, Emir's outfit (and a bit of the doors) 
+        the shades are quite different from each other. For example, Emir's outfit (and a bit of the doors) 
         ranges from bright to dark for the top and bottom channels, respectively. Compared to the cathedral's color channels 
         <a href="#part2">here</a>, Emir's color channels (especially the bottom one) will "disagree" (i.e. negatively correlate) 
         more with each other when properly aligned, which results in subpar displacements using our NCC metric.
@@ -423,7 +424,7 @@
     <h3 id="part7a">Sobel Edge Detection</h3>
     <p>
         By using edge detection, we can now align our color channels based on the edges. 
-        Intuitively, edges correspond to when the color changes drastically (e.g. going 
+        Intuitively, edges correspond to when the color changes drastically across neighboring pixels (e.g. going 
         from black to white squares on a chessboard). Mathematically, edges correspond 
         to a large magnitude for the gradient (i.e. a bigger “difference” in our pixels). 
         <code>scikit-image</code> already has a built in method (<a href="https://scikit-image.org/docs/0.25.x/api/skimage.filters.html#skimage.filters.sobel_h"><code>skimage.filters.sobel</code></a>) 
