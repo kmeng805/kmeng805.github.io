@@ -95,9 +95,23 @@
             (sqrt ommitted):
         </p>
         <img src="img/l2.png" width="50%" alt="L2" style="display: block; margin: 0 auto;">
-        <p>Euclidean normalization </p>
-        <p>To make our metric even stronger, we switched to normalized cross-correlation:
+        <p>Scary formula alert! Actually, L2 norm / Euclidean distance is quite simple: it essentially calculates 
+            the square root of the squared difference between pixel values (very similar to how you'd calculate 
+            the distance between two points on an x-y axis). In this equation, I is the channel we're trying to align 
+            (with displacement candidates u and v), 
+            and P is the channel we are trying to align I to.
+            The best alignment would then <em>minimize</em> the total Euclidean distance across all pixels.
         </p>
+        <p>One shortcoming of L2 norm is that it depends on the original magnitude of our pixel values. 
+            If our red channel happened to be taken under worser lighting conditions compared to, say, 
+            the green channel, then the overall magnitudes of the red pixel values would be lower than those 
+            of the green pixels, which would be penalized in L2 norm. To mediate this, we can (1) <em>normalize</em> 
+            these pixel values so they're more relative to the overall channel's brightness, and we can (2) measure their 
+            <em>cross-correlation</em> (taking into account general increases/decreases as opposed to exact absolute differences).
+        </p>
+        <p>
+            Thus, to make our metric even stronger, we switched to normalized cross-correlation:
+        </p> 
     </div>
 
     <h3 id="part3b">Metric 2: Normalized Cross-Correlation (NCC)</h2>
@@ -105,6 +119,13 @@
         <p>
         </p>
         <img src="img/ncc.png" width="60%" alt="NCC" style="display: block; margin: 0 auto;">
+        <p>Scary formula alert part two!! Not to worry - this formula is actually doing exactly what we described above!
+            First, we are normalizing the pixel values of I (the channel we're aligning) and P, by subtracting 
+            the mean (I_bar and P_bar) and dividing by the standard deviation (the sqrts of the summations in the denominator). 
+            Then, we compute their cross-correlation by just multiplying these normalized values together.
+            Since our metric is measuring cross-correlation, the best alignment will <em>maximize</em> our NCC 
+            across all pixels.
+        </p>
     </div>
     <br>
     <h3 id="part33">Trimming</h2>
@@ -393,7 +414,7 @@
 
     <p>You may have noticed that the image of the Emir of Bukhara looks a bit 
         more blurry than the rest, implying that our current procedure didn't do a great job 
-        at aligning the color channels for this image in particular. In other words, the correlation 
+        at aligning the color channels for this image in particular. In other words, the cross-correlation 
         between RGB wasn't the strongest for the proper alignment. Why is this the case?
     </p>
     <div style="margin: 0 auto; width:30%;">
