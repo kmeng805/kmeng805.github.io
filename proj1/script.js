@@ -3,7 +3,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const stateText = document.getElementById("toggle-state");
   let flipped = false;
 
-  // Initialize state display
   stateText.textContent = "Currently: (x, y)";
 
   button.addEventListener("click", () => {
@@ -19,12 +18,26 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
-    // Toggle the flipped state
     flipped = !flipped;
 
-    // Update the button state display
     stateText.textContent = flipped
       ? "Currently: (x, y)"
       : "Currently: (row, col)";
   });
+
+  const toggle = document.getElementById('dark-mode-toggle');
+
+  if (localStorage.getItem('dark-mode') === 'enabled') {
+    document.body.classList.add('dark-mode');
+  }
+
+  toggle.addEventListener('click', () => {
+    document.body.classList.toggle('dark-mode');
+    if (document.body.classList.contains('dark-mode')) {
+      localStorage.setItem('dark-mode', 'enabled');
+    } else {
+      localStorage.setItem('dark-mode', 'disabled');
+    }
+  });
+
 });

@@ -3,6 +3,7 @@ body {
     margin: 0;
     font-family: "Helvetica Neue", Arial, sans-serif;
     color: #333;
+    background: #fff;
 }
 
 .sidebar {
@@ -41,7 +42,6 @@ body {
     text-decoration: underline;
 }
 
-/* Main content area */
 .main {
     flex: 1;
     padding: 40px;
@@ -83,11 +83,11 @@ body {
 }
 
 .image-label {
-    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; /* prettier font */
-    font-size: 1rem; /* slightly smaller than main text */
-    font-weight: 500; /* medium weight */
-    color: #333; /* soft dark color */
-    margin-bottom: 8px; /* space between label and image */
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; 
+    font-size: 1rem; 
+    font-weight: 500; 
+    color: #333; 
+    margin-bottom: 8px; 
     text-align: center;
 }
 
@@ -160,4 +160,45 @@ button {
 
 button:hover {
     background: #45a049;
+}
+
+/* ===============================
+   🌙 DARK MODE STYLES
+   =============================== */
+
+body.dark-mode {
+    background: #121212;
+    color: #e0e0e0;
+}
+
+body.dark-mode .sidebar {
+    background-color: #1e1e1e;
+    border-right: 1px solid #444;
+}
+
+body.dark-mode .sidebar a {
+    color: #66aaff;
+}
+
+body.dark-mode .main h2 {
+    border-bottom: 2px solid #333;
+}
+
+body.dark-mode .callout {
+    background-color: #1d2b36;
+    border-left: 4px solid #3399ff;
+    color: #cce6ff;
+}
+
+body.dark-mode .image-label {
+    color: #ccc;
+}
+
+body.dark-mode .text-desc,
+body.dark-mode .description {
+    color: #bbb;
+}
+
+body.dark-mode .subtitle {
+    color: #aaa;
 }
