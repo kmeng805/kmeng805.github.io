@@ -53,3 +53,64 @@ img {
     border: 2px solid black;
     display: flex;
 }
+
+body {
+    display: flex;
+    flex-direction: row;
+    font-family: "Comfortaa", sans-serif;
+}
+
+.content {
+    flex: 1;
+    padding: 20px;
+}
+
+.toc {
+    margin-top: 40px;
+    width: 220px;
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    border-left: 2px solid #ccc;
+    padding-left: 15px;
+    font-size: 14px;
+    text-align: left;
+}
+
+
+.toc ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+.toc li {
+    margin-bottom: 10px;
+}
+
+.toc a {
+    text-decoration: none;
+    color: #333;
+}
+
+.toc a:hover {
+    text-decoration: underline;
+}
+
+.img-container {
+    display: flex;
+    gap: 10px;
+    margin: 10px 0;
+}
+
+.img-desc, .note {
+    margin: 4px 0;
+}
+
+.title {
+    font-size: 28px;
+}
+
+.header {
+    font-size: 22px;
+    margin-top: 40px;
+}

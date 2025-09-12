@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Proj 1</title>
+  <link rel="stylesheet" href="proj1.css">
+</head>
+<body>
+  <nav class="sidebar">
+    <br>
+    <h2><a href="../index.html">Home</a></h2>
+    <br>
+    <h2>Table of Contents</h2>
+    <ul>
+      <li><a href="#part1">Overview</a></li>
+      <li><a href="#part2">Naive Approach</a></li>
+      <li><a href="#part3">Improvement: Metrics + Trimming</a>
+        <ul>
+            <li><a href="#part33">Trimming</a></li>
+            <li><a href="#part3a">L2 (Euclidean) Normalization</a></li>
+            <li><a href="#part3b">Normalized Cross-Correlation (NCC)</a></li>
+        </ul>
+      </li>
+      <li><a href="#part4">Results with JPG Images</a></li>
+      <li><a href="#part5">Improvement: Image Pyramid</a></li>
+      <li><a href="#part6">Results with TIFF Images</a></li>
+      <li><a href="#part7">Special Case: Emir of Bukhara</a>
+        <ul>
+            <li><a href="#part7a">Sobel Edge Alignment</a></li>
+        </ul>
+      </li>
+      
+    </ul>  
+  </nav>
+
+  <div class="main">
+    <h1>Project 1: Images of the Russian Empire</h1>
+    <p class="subtitle">Colorizing the Prokudin-Gorskii photo collection</p>
+
+    <h2 id="part1">Overview</h2>
+    <div class="img-container">
+      <p class="text-desc">During the early 1900s, Sergei Mikhailovich Prokudin-Gorskii used 
+        a pioneering RGB technique to capture thousands of color photographs across the 
+        Russian Empire, including the only known color portrait of Leo Tolstoy. Lucky for us, 
+        Prokudin-Gorskii's glass plate negatives were preserved and later digitized by the Library of 
+        Congress. In this project, we attempt to reconstruct those images by extracting and 
+        aligning the red, green, and blue channels using image processing 
+        techniques described below!</p>
+    </div>
+    <div class="callout">
+      <strong>Info:</strong> You can find the Prokudin-Gorskii Collection <a href="https://www.loc.gov/collections/prokudin-gorskii/?sp=1&st=grid">here</a>!
+    </div>
+
+    <p style="font-size: 13px; font-style: italic;">
+        *Although this is written in first-person plural (just preference), the project was completed by myself individually.
+    </p>
+
+    <h2 id="part2">Naive Approach</h2>
+    <div>
+        <p class="text-desc">
+            In the files provided by the Prokudin-Gorskii Collection, each picture 
+            consists of three color channel images (see below), which we interpreted as 
+            blue, green, and red, from top to bottom.
+        </p>
+        <div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="img/channels.png" height="200px" alt="Image Channels">
+        </div>
+        <p>
+            To align these images, the most apparent approach would be to directly stack the images on
+            top of each other, which we can achieve using 
+            <a href="https://numpy.org/doc/2.3/reference/generated/numpy.dstack.html"><code>np.dstack</code></a>. 
+            However, this approach is insufficient, as the color channel images are not perfectly aligned themselves.
+        </p>
+        <p>For example, if we were to perform the direct stack for cathedral.jpg, we would get the following:</p>
+        <div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="img/naive-stack.png" height="200px" alt="Naive Stack">
+        </div>
+        <p>We can do much better!</p>
+    </div>
+
+    <h2 id="part3">Improvement: Trimming + Metrics</h2>
+    <p>Instead of directly stacking, we can improve our alignment of images by
+        searching over a fixed window of displacements, and using a metric to evaluate
+        whether a particular change in displacement in one color channel better aligns 
+        with the other color channel. With this metric, we found the (row, col) displacement 
+        values for aligning the green channel on the blue, and the red on the blue. 
+        We then used those values to shift our R, G, and B images with 
+        <a href="https://numpy.org/doc/2.0/reference/generated/numpy.roll.html"><code>np.roll</code></a>, and 
+        stacked the shifted three images to get our final output.
+    </p>
+    <h3 id="part33">Trimming</h2>
+    <p>
+        However, before implementing this search, we must also trim the input image! Why?
+        The borders of the image could negatively affect our metric, since the metrics we
+        chose (see below) perform well when the RGB values are relatively the same, which is
+        not the case for the borders. In general, our metrics will perform well if the RGB values
+        "agree" on how white or black a pixel is (i.e. a dark pixel will have relatively
+        low RGB values, and this similarity between the RBB values is what our metrics look for).
+    </p>
+    <h3 id="part3a">Metric 1: L2 (Euclidean) Normalization</h2>
+    <div>
+        <p>One metric we used was L2 normalization, also known as Euclidean normalization 
+            (sqrt ommitted):
+        </p>
+        <img src="img/l2.png" width="50%" alt="L2" style="display: block; margin: 0 auto;">
+        <p>To make our metric even stronger, we switched to normalized cross-correlation:
+        </p>
+    </div>
+
+    <h3 id="part3b">Metric 2: Normalized Cross-Correlation (NCC)</h2>
+    <div>
+        <p>
+        </p>
+        <img src="img/ncc.png" width="60%" alt="NCC" style="display: block; margin: 0 auto;">
+    </div>
+    <br>
+    <!-- <div style="color: green; font-size: 12px;">TODO: prob wanna add more explanation here later lol</div> -->
+
+    <h2 id="part4">Results with JPG Images</h2>
+    <p>
+        After trimming 8% off the edges of the images, we searched over the range of (-20, 20) to determine 
+        how much shifting of the green and red image channels was necessary, using NCC as our metric. Below are 
+        the resulting outputs for input images that were in JPG format.
+    </p>
+    <div class="callout">
+      <strong>Note:</strong> The 8% was determined through trial 
+        and error. Initially, 5% was used, but the resulting alignment for cathedral.jpg ended up being quite off, so 
+        we ended up trimming more.
+    </div>
+    <p style="font-size: 13px; font-style: italic;">
+        Displacement values are in (x, y) format by default. As of now, they will be affected if 
+        the toggle button in a later section is pressed.
+    </p>
+    <div class="image-grid">
+    
+        <div class="image-item">
+            <p class="image-label">cathedral.jpg</p>
+            <img src="img/cathedral_single.jpg" alt="cathedral">
+            <div class="description">
+                
+                <p class="coord" data-label="Green" data-x="5" data-y="2">Green: (2, 5)</p>
+                <p class="coord" data-label="Red" data-x="12" data-y="3">Red: (3, 12)</p>
+            </div>
+        </div>
+
+        <div class="image-item">
+            <p class="image-label">monastery.jpg</p>
+            <img src="img/monastery_single.jpg" alt="monastery">
+            <div class="description">
+                <p class="coord" data-label="Green" data-x="-3" data-y="2">Green: (2, -3)</p>
+                <p class="coord" data-label="Red" data-x="3" data-y="2">Red: (2, 3)</p>
+            </div>
+        </div>
+
+        <div class="image-item">
+            <p class="image-label">tobolsk.jpg</p>
+            <img src="img/tobolsk_single.jpg" alt="tobolsk">
+            <div class="description">
+                <p class="coord" data-label="Green" data-x="3" data-y="2">Green: (2, 3)</p>
+                <p class="coord" data-label="Red" data-x="6" data-y="3">Red: (3, 6)</p>
+            </div>
+        </div>
+    </div>
+    
+    <h2 id="part5">Improvement: Image Pyramid</h2>
+    <div>
+        <p>
+            With huge files, like TIFF, searching over our fixed window of (-20, 20) will 
+            be expensive. To speed up the process, we implemented an image pyramid, which 
+            will essentially obtain the shifted displacements on a small version of the image, 
+            then improve those displacements as we multiplicatively increase the dimensions 
+            of our image to its original size. The process is as follows:
+        </p>
+        <ul>
+            <li>
+                Recursively downsize the image to a fraction of its current height and width 
+                (we used <code>np.resize</code>), until we reach a size reasonably small enough
+                to brute force (i.e. our base case).
+            </li>
+            <br>
+            <li>
+                Search over the fixed window using the NCC metric, and return the displacements.
+            </li>
+            <br>
+            <li>
+                Going back up the recursive call stack, fine tune the displacements by searching 
+                over a much smaller window (to accomodate for larger image dimensions), relative to the previous displacements.
+            </li>
+        </ul>
+        <div class="callout">
+            <strong>Note:</strong> We originally downsized our images by a factor of 2, which performed
+            well for many of the images, except for the Emir of Bukhara (emir.tif). Poor Emir's red channel 
+            was almost an entire head off from the green and blue channels...
+            Changing the resize factor to 3, as well as tweaking the bounds of our search windows, 
+            significantly improved the results for Emir, and didn't negatively impact the alignments for 
+            the other images.
+        </div>
+    </div>
+
+    <h2 id="part6">Results with TIFF Images</h2>
+
+    <p>
+        After trimming 8% off the edges of the images, we used the image pyramid to speed up 
+        the search for our displacement values. Below are 
+        the resulting outputs for input images that were in TIFF format (converted to PNG 
+        on this website so your computer doesn't explode).
+    </p>
+
+    <p style="font-size: 13px; font-style: italic;">
+        Press the below button to view the calculated displacement values in either 
+        (x, y) format, or (row, col) format (which was used in <code>np.roll</code> with axes 0 and 1, respectively).
+    </p>
+    <button id="toggle">
+        Toggle (row, col) ↔ (x, y) 
+    </button>
+    <span id="toggle-state" style="margin-left: 8px;">Currently: (row, col)</span>
+
+
+    <div class="image-grid">
+        <div class="image-item">
+            <p class="image-label">cathedral.jpg</p>
+            <img src="img/cathedral.jpg" alt="cathedral">
+            <div class="description">
+                
+                <p class="coord" data-label="Green" data-x="5" data-y="2">Green: (2, 5)</p>
+                <p class="coord" data-label="Red" data-x="12" data-y="3">Red: (3, 12)</p>
+            </div>
+        </div>
+
+        <div class="image-item">
+            <p class="image-label">monastery.jpg</p>
+            <img src="img/monastery.jpg" alt="monastery">
+            <div class="description">
+                <p class="coord" data-label="Green" data-x="-3" data-y="2">Green: (2, -3)</p>
+                <p class="coord" data-label="Red" data-x="3" data-y="2">Red: (2, 3)</p>
+            </div>
+        </div>
+
+        <div class="image-item">
+            <p class="image-label">tobolsk.jpg</p>
+            <img src="img/tobolsk.jpg" alt="tobolsk">
+            <div class="description">
+                <p class="coord" data-label="Green" data-x="3" data-y="2">Green: (2, 3)</p>
+                <p class="coord" data-label="Red" data-x="6" data-y="3">Red: (3, 6)</p>
+            </div>
+        </div>
+
+        <div class="image-item">
+            <p class="image-label">church.tif</p>
+            <img src="img/church.jpg" alt="church">
+            <div class="description">
+                <p class="coord" data-label="Green" data-x="25" data-y="4">Green: (4, 25)</p>
+                <p class="coord" data-label="Red" data-x="58" data-y="-4">Red: (-4, 58)</p>
+            </div>
+        </div>
+
+        <div class="image-item">
+            <p class="image-label">emir.tif</p>
+            <img src="img/emir.jpg" alt="emir">
+            <div class="description">
+                <p class="coord" data-label="Green" data-x="49" data-y="24">Green: (24, 49)</p>
+                <p class="coord" data-label="Red" data-x="103" data-y="55">Red: (55, 103)</p>
+            </div>
+        </div>
+
+        <div class="image-item">
+            <p class="image-label">harvesters.tif</p>
+            <img src="img/harvesters.jpg" alt="harvesters">
+            <div class="description">
+                <p class="coord" data-label="Green" data-x="59" data-y="16">Green: (16, 59)</p>
+                <p class="coord" data-label="Red" data-x="124" data-y="13">Red: (13, 124)</p>
+            </div>
+        </div>
+
+        <div class="image-item">
+            <p class="image-label">icon.tif</p>
+            <img src="img/icon.jpg" alt="icon">
+            <div class="description">
+                <p class="coord" data-label="Green" data-x="41" data-y="17">Green: (17, 41)</p>
+                <p class="coord" data-label="Red" data-x="89" data-y="23">Red: (23, 89)</p>
+            </div>
+        </div>
+
+        <div class="image-item">
+            <p class="image-label">italil.tif</p>
+            <img src="img/italil.jpg" alt="italil">
+            <div class="description">
+                <p class="coord" data-label="Green" data-x="38" data-y="21">Green: (21, 38)</p>
+                <p class="coord" data-label="Red" data-x="76" data-y="35">Red: (35, 76)</p>
+            </div>
+        </div>
+
+        <div class="image-item">
+            <p class="image-label">lastochikino.tif</p>
+            <img src="img/lastochikino.jpg" alt="lastochikino">
+            <div class="description">
+                <p class="coord" data-label="Green" data-x="-2" data-y="-2">Green: (-2, -2)</p>
+                <p class="coord" data-label="Red" data-x="75" data-y="-8">Red: (-8, 75)</p>
+            </div>
+        </div>
+
+        <div class="image-item">
+            <p class="image-label">lugano.tif</p>
+            <img src="img/lugano.jpg" alt="lugano">
+            <div class="description">
+                <p class="coord" data-label="Green" data-x="41" data-y="-16">Green: (-16, 41)</p>
+                <p class="coord" data-label="Red" data-x="92" data-y="-29">Red: (-29, 92)</p>
+            </div>
+        </div>
+
+        <div class="image-item">
+            <p class="image-label">melons.tif</p>
+            <img src="img/melons.jpg" alt="melons">
+            <div class="description">
+                <p class="coord" data-label="Green" data-x="82" data-y="10">Green: (10, 82)</p>
+                <p class="coord" data-label="Red" data-x="179" data-y="13">Red: (13, 179)</p>
+            </div>
+        </div>
+
+        <div class="image-item">
+            <p class="image-label">milan.tif*</p>
+            <img src="img/milan.jpg" alt="milan">
+            <div class="description">
+                <p class="coord" data-label="Green" data-x="48" data-y="-9">Green: (-9, 48)</p>
+                <p class="coord" data-label="Red" data-x="111" data-y="-15">Red: (-15, 111)</p>
+            </div>
+        </div>
+
+        <div class="image-item">
+            <p class="image-label">monument.tif*</p>
+            <img src="img/monument.jpg" alt="monument">
+            <div class="description">
+                <p class="coord" data-label="Green" data-x="100" data-y="30">Green: (30, 100)</p>
+                <p class="coord" data-label="Red" data-x="198" data-y="39">Red: (39, 198)</p>
+            </div>
+        </div>
+
+        <div class="image-item">
+            <p class="image-label">museum.tif*</p>
+            <img src="img/museum.jpg" alt="museum">
+            <div class="description">
+                <p class="coord" data-label="Green" data-x="76" data-y="16">Green: (16, 76)</p>
+                <p class="coord" data-label="Red" data-x="165" data-y="16">Red: (16, 165)</p>
+            </div>
+        </div>
+
+        <div class="image-item">
+            <p class="image-label">pond.tif*</p>
+            <img src="img/pond.jpg" alt="pond">
+            <div class="description">
+                <p class="coord" data-label="Green" data-x="43" data-y="6">Green: (6, 43)</p>
+                <p class="coord" data-label="Red" data-x="108" data-y="2">Red: (2, 108)</p>
+            </div>
+        </div>
+
+        <div class="image-item">
+            <p class="image-label">self_portrait.tif</p>
+            <img src="img/self_portrait.jpg" alt="self portrait">
+            <div class="description">
+                <p class="coord" data-label="Green" data-x="78" data-y="29">Green: (29, 78)</p>
+                <p class="coord" data-label="Red" data-x="176" data-y="37">Red: (37, 176)</p>
+            </div>
+        </div>
+
+        <div class="image-item">
+            <p class="image-label">siren.tif</p>
+            <img src="img/siren.jpg" alt="siren">
+            <div class="description">
+                <p class="coord" data-label="Green" data-x="49" data-y="-6">Green: (-6, 49)</p>
+                <p class="coord" data-label="Red" data-x="95" data-y="-25">Red: (-25, 95)</p>
+            </div>
+        </div>
+
+        <div class="image-item">
+            <p class="image-label">three_generations.tif</p>
+            <img src="img/three_generations.jpg" alt="three generations">
+            <div class="description">
+                <p class="coord" data-label="Green" data-x="53" data-y="14">Green: (14, 53)</p>
+                <p class="coord" data-label="Red" data-x="112" data-y="11">Red: (11, 112)</p>
+            </div>
+        </div>
+    </div>
+    <div class="callout">
+      <strong>Note:</strong> Images marked with an asterisk<strong>*</strong> are the ones of my choosing.
+    </div>
+
+    <h2 id="part7">Special Case: Emir of Bukhara</h2>
+
+    <p>You may have noticed that the image of the Emir of Bukhara looks a bit 
+        more blurry than the rest, implying the algorithm didn't do a great job 
+        at aligning the color channels for this image in particular. 
+    </p>
+    <div class="image-grid" style="align-items:center;">
+        <div class="image-item">
+            <p class="image-label">emir.tif (same from earlier)</p>
+            <img src="img/emir.jpg" alt="emir">
+            <div class="description">
+                <p class="coord" data-label="Green" data-x="49" data-y="24">Green: (24, 49)</p>
+                <p class="coord" data-label="Red" data-x="103" data-y="55">Red: (55, 103)</p>
+            </div>
+        </div>
+    </div>
+    <p>Our previous metrics relied on the magnitudes of the pixel values to perform 
+        alignment. Thus, to try to improve Emir's alignment, we decided to try a different 
+        approach, namely edge detection.
+    </p>
+
+    <h3 id="part7a">Sobel Edge Detection</h3>
+    <p>
+        By using edge detection, we can now align our color channels based on the edges. 
+        Intuitively, edges correspond to when the color changes drastically (e.g. going 
+        from black to white squares on a chessboard). Mathematically, edges correspond 
+        to a large magnitude for the gradient (i.e. a bigger “difference” in our pixels). 
+        <code>scikit-image</code> already has a built in method (<a href="https://scikit-image.org/docs/0.25.x/api/skimage.filters.html#skimage.filters.sobel_h"><code>skimage.filters.sobel</code></a>) 
+        that does this edge detection & alignment for us, so we’ll use it! Below is the 
+        result for emir.tif using Sobel edge detection.
+
+    </p>
+    <div class="image-grid">
+        <div class="image-item">
+            <p class="image-label">emir.tif with Sobel edge detection</p>
+            <img src="img/emir_sobel.jpg" alt="emir">
+            <div class="description">
+                <p class="coord" data-label="Green" data-x="49" data-y="23">Green: (23, 49)</p>
+                <p class="coord" data-label="Red" data-x="107" data-y="40">Red: (40, 107)</p>
+            </div>
+        </div>
+    </div>
+    <p>As you can see, the alignment is <em>much</em> better! Emir is happy now.</p>
+  </div>
+  
+<script src="script.js"></script>
+
+</body>
+</html>
