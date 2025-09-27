@@ -7,13 +7,14 @@ body {
 }
 
 .sidebar {
-    width: 260px;
+    width: 220px; /* previously 260px */
     padding: 30px 20px;
     border-right: 1px solid #ddd;
     height: 100vh;
     position: sticky;
     top: 0;
     background-color: #fafafa;
+    overflow-y: auto;
 }
 
 .sidebar a.active-toc {
@@ -94,7 +95,7 @@ body.dark-mode .sidebar a.active-toc {
 }
 
 .img-container img {
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  transition: transform 1s ease-in-out, box-shadow 0.3s ease;
 }
 
 .image-label {
@@ -107,7 +108,7 @@ body.dark-mode .sidebar a.active-toc {
 }
 
 .img-container img:hover {
-  transform: scale(2);
+  transform: scale(1.5);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
 }
 
@@ -115,6 +116,26 @@ body.dark-mode .sidebar a.active-toc {
     font-size: 12pt;
     color: #555;
     margin-top: 0.3em;
+}
+
+.image-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  column-gap: 140px;
+  row-gap: 20px;
+  position: relative;
+  overflow: visible;
+  z-index: 0;
+}
+
+.image-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  column-gap: 20px;
+  row-gap: 20px;
+  position: relative;
+  overflow: visible;
+  z-index: 0;
 }
 
 .image-grid {
@@ -187,8 +208,9 @@ body.dark-mode {
 }
 
 body.dark-mode .sidebar {
-    background-color: #1e1e1e;
-    border-right: 1px solid #444;
+    background-color: #222;
+    border: 1px solid #444;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
 }
 
 body.dark-mode .sidebar a {

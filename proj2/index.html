@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Proj 2</title>
+  <link rel="stylesheet" href="proj2.css">
+
+	<script type="text/x-mathjax-config">
+		MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+	</script>
+	<script type="text/javascript"
+		src="http://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+	</script>
+  <!-- Link to Prism CSS -->
+	<link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+
+	<!-- Link to Prism JS -->
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+
+</head>
+<body>
+  <nav class="sidebar">
+    <br>
+    <h2><a href="../index.html">Home</a></h2>
+    <br>
+    <button id="dark-mode-toggle">Dark Mode</button>
+    <h2>Table of Contents</h2>
+    <ul>
+			<!-- <li><a href="#part1">Overview</a></li> -->
+      <li><a href="#part1">Part 1: Fun with Filters</a></li>
+        <ul>
+            <li><a href="#part1.1">Convolutions from Scratch</a></li>
+            <li><a href="#part1.2">Finite Difference Operator</a></li>
+            <li><a href="#part1.3">Derivative of Gaussian</a></li>
+        </ul>
+      </li>
+      <li><a href="#part2">Part 2: Fun with Frequencies</a>
+        <ul>
+            <li><a href="#part2.1">Image Sharpening</a></li>
+            <li><a href="#part2.2">Hybrid Images</a></li>
+            <li><a href="#part2.3">Gaussian and Laplacian</a></li>
+            <li><a href="#part2.4">Multiresolution Blending</a></li>
+        </ul>
+      </li>
+      
+    </ul>  
+  </nav>
+
+  <div class="main">
+    <h1>Project 2: Fun with Filters and Frequencies</h1>
+
+		<div>
+			<!-- <h2 id="part0">Overview</h2>
+    	<div class="img-container">
+				<p class="text-desc">todo</p>
+			</div> -->
+			<p style="font-size: 13px; font-style: italic;">
+					*Although this is written in first-person plural (just preference), the project was completed by myself individually.
+			</p>
+		</div>
+
+		<h2 id="part1">Part 1: Fun with Filters</h2>
+
+    <h2 id="part1.1">Convolutions from Scratch</h2>
+		<div>
+			<p> 
+				What are convolution operations?
+			</p>
+			<p> 
+				You can think of convolution as a sort of filter operation, where we take our kernel ("filter" matrix) 
+				and scan it across our image matrix, computing our output values along the way. The process is as follows:
+			</p>
+			<ul>
+				<li>
+						First, we flip the filter matrix both horizontally and vertically. This is what makes the convolution operation 
+						different from just regular cross-correlation! Flipping the matrix allows the operation to be commutative 
+						and associative, which lets us apply many filters as just one big filter.
+				</li>
+				<br>
+				<li>
+						Then, for every pixel in our image [f], we compute the cross-correlation 
+						(the dot product between local neighborhood [red box] and kernel [h] per pixel) and assign those 
+						values to our output matrix [g]. See the below visualization (taken from lecture slides)!
+				</li>
+			</ul>
+			<div>
+				<div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="img/convolution.png" height="200px" alt="cam_conv_dx">
+        </div>
+			</div>
+		</div>
+		<div>
+			<p>We can implement convolution as described above using just our basic numpy operations. 
+				Here's a potential implementation using 4 for loops:
+			</p>
+			<pre><code class="language-python"># manual convolution with 4 for loops
+def convolve_manually_4(image, input_filter): # input image is gray
+
+    box_r, box_c = input_filter.shape
+    pad_r, pad_c = box_c // 2, box_r // 2 # pad_r means how much on left / right of every row
+    filter_flip = np.flip(input_filter, 1)
+    filter_flip = np.flip(filter_flip, 0)
+    
+    im_pad = np.pad(image, ((pad_c, pad_c), (pad_r, pad_r)), constant_values=0) # pad the image (with 0s)
+    manual_4_output = np.zeros(image.shape)
+
+    for px in range(len(image)):
+        for py in range(len(image[0])):
+            total = 0
+            for fx in range(box_r):
+                for fy in range(box_c):
+                    total += filter_flip[fx][fy] * im_pad[px + fx][py + fy]
+            manual_4_output[px, py] = total
+    
+    return manual_4_output</code></pre>
+			<p>The above implementation is quite inefficient, since we are manually computing every individual 
+				multiplication for every pixel's neighborhood (in the two inner for loops). We can replace the two 
+				inner loops with NumPy operations instead, taking advantage of their faster vectorized operations.
+			</p>
+			<p>Here's what the implementation could look like with two for loops:</p>
+			<pre><code class="language-python"># manual convolution with 2 for loops
+def convolve_manually_2(image, input_filter): # input image is grey
+    box_r, box_c = input_filter.shape
+    pad_r, pad_c = box_c // 2, box_r // 2 # pad_r means how much on left / right of every row
+    filter_flip = np.flip(input_filter, 1)
+    filter_flip = np.flip(filter_flip, 0)
+    
+    im_pad = np.pad(image, ((pad_c, pad_c), (pad_r, pad_r)), constant_values=0) # pad the image (with 0s)
+    
+    manual_2_output = np.zeros(image.shape)
+    for px in range(len(image)):
+        for py in range(len(image[0])):
+            matmul_sum = np.dot(np.reshape(filter_flip, box_r * box_c), 
+                                np.reshape(im_pad[px:(px + box_r), py:(py + box_c)], box_r * box_c))
+            manual_2_output[px, py] = matmul_sum
+    
+    return manual_2_output</code></pre>
+				
+			<p>
+				<code>scipy</code> also has a nice built-in function we can use to convolve matrices together 
+				(<a href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.convolve2d.html"><code>scipy.signal.convolve2d</code></a>). 
+				Unlike our bare implementations above, the <code>convolve2d</code> function is much more flexible:
+				<ul>
+					<li><p>The <code>mode</code> parameter allows us to determine the shape of the output image 
+						(e.g. if we only convolve for pixels that have enough neighbors, our output will shrink 
+						$\rightarrow$ <code>mode='valid'</code>). In our functions, we maintain the same shape 
+					for the output.</p></li>
+					<li><p>The <code>boundary</code> parameter allows us to determine how we pad our image, which 
+						will allow us to perform the convolution for pixels near the border as well (i.e. make the 
+						dimensions of the local neighborhood match the dimensions of the kernel). 
+						In our functions, we pad with a fixed value (zero).
+					</p></li>
+					<li><p>The <code>fillvalue</code> parameter allows us to determine what fixed value to pad 
+						our image with. In our functions, we pad with zero.</p></li>
+					<li><p>Read the documentation for more!</p></li>
+				</ul>
+				<code>scipy.signal.convolve2d</code> is also better runtime-wise, since it performs more 
+				optimizations under the hood (in contrast to 
+				our two outer for loops, where we're manually going through every pixel).
+			</p>
+
+			<div>
+				<p>
+          We will demonstrate convolutions using a simple finite difference matrices as our kernel. $D_x$ 
+          compares a pixel with its left and right neighbors, detecting <em>vertical</em> edges. Conversely, $D_y$ 
+          compares a pixel with its top and bottom neighbors, detecting <em>horizontal</em> edges.
+				</p>
+
+				<div style="text-align:center">
+					<p class="image-label">$D_x$ and $D_y$ finite difference matrices:</p>
+					<img style="align-items:center" src="img/dxy.png" height="110px" alt="dxy">
+				</div>
+
+        <div class="image-grid" style="align-items:center; justify-content:center;">
+          <div class="image-item">
+              <p class="image-label">Original image:</p>
+              <img src="img/yaya/yaya_gray.png" height="210px" alt="box">
+          </div>
+          <div class="image-item">
+              <p class="image-label">Convolved with $D_x$:</p>
+              <img src="img/yaya/yaya_dx.png" height="40px" alt="box">
+          </div>
+          <div class="image-item">
+              <p class="image-label">Convolved with $D_y$:</p>
+              <img src="img/yaya/yaya_dy.png" height="210px" alt="box">
+          </div>
+        </div>
+
+				<p>We can also blur our image by convolving it with a box filter:</p>
+
+        <div class="image-grid" style="align-items:center; justify-content:center;">
+          <div class="image-item">
+              <p class="image-label">Original image:</p>
+              <img src="img/yaya/yaya_gray.png" height="210px" alt="box">
+          </div>
+          <div class="image-item">
+              <p class="image-label">Box filter:</p>
+              <img src="img/box.png" height="80px" alt="box">
+          </div>
+          <div class="image-item">
+              <p class="image-label">Convolved with box filter:</p>
+              <img src="img/yaya/yaya_convolved.png" height="210px" alt="box">
+          </div>
+        </div>
+			</div>
+			
+		</div>
+
+    <h2 id="part1.2">Finite Difference Operator</h2>
+    <div>
+        <p class="text-desc">
+            Let's go back to our convolutions with our finite difference matrices, $D_x$ and $D_y$, 
+            and perform the convolutions on this <code>cameraman</code> image:
+        </p>
+
+        <div class="image-grid" style="align-items:center; justify-content:center;">
+          <div class="image-item">
+              <p class="image-label">Original image:</p>
+              <img src="img/part1/cameraman.png" height="210px" alt="box">
+          </div>
+          <div class="image-item">
+              <p class="image-label">Convolved with $D_x$:</p>
+              <img src="img/part1/cam_conv_dx.png" height="80px" alt="box">
+          </div>
+          <div class="image-item">
+              <p class="image-label">Convolved with $D_y$:</p>
+              <img src="img/part1/cam_conv_dy.png" height="210px" alt="box">
+          </div>
+        </div>
+        <p>
+            Since we know the $dx$ and $dy$ values for every pixel, we can compute the gradient magnitude as
+            <img style="align-items:center;" src="img/part1/gradient.png" height="50px" alt="gradient">
+        </p>
+        <div style="text-align:center"><p class="image-label">Gradient magnitude image:</p></div>
+				<div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="img/part1/cam_gradient.png" height="250px" alt="cam_gradient">
+        </div>
+
+        <p>In the gradient magnitude image, it's a bit difficult to see edges clearly, since some 
+          pixels are brighter than others. To make the edges more obvious, we can <em>binarize</em> our gradient magnitude 
+          image. That is, for pixels above a certain threshold, we will set their values to 1, and set 
+          the rest to 0.
+        </p>
+        <div class="callout">
+          <strong>Note:</strong> After some experimentation, we decided on a threshold value of 0.28.
+          With 0.28, we can still capture all the edges of the cameraman and his equipment, and we 
+          minimize the amount of noise in our image.
+        </div>
+
+        <div style="text-align:center">
+					<p class="image-label">Binarized gradient magnitude image:</p>
+				</div>
+				<div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="img/part1/cam_bin_gradient.png" height="250px" alt="cam_bin_gradient">
+        </div>
+    </div>
+
+    <h2 id="part1.3">Derivative of Gaussian (DoG)</h2>
+    <p>
+      Earlier, we did some experimentation to select a threshold (for our binarized gradient image) to 
+      try to minimize the noise. However, this did not perform too well - we can still see white specks in 
+      our binarized gradient image.
+    </p>
+    <p>
+      How can we reduce the noise further? If we convolve our image with a Gaussian filter, it will result 
+      in a blurred version of the image, and thus the noise will be reduced! Let's try blurring our image first, 
+      then performing the same steps to get our cleaner binarized gradient image: 
+    </p>
+
+    <div class="image-grid" style="align-items:center; justify-content:center;">
+      <div class="image-item">
+          <p class="image-label">Blurred cameraman image:</p>
+          <img src="img/part1/cameraman_blurred.png" height="210px" alt="box">
+      </div>
+      <div class="image-item">
+          <p class="image-label">Blur convolved with $D_x$:</p>
+          <img src="img/part1/cam_blur_dx.png" height="80px" alt="box">
+      </div>
+      <div class="image-item">
+          <p class="image-label">Blur convolved with $D_y$:</p>
+          <img src="img/part1/cam_blur_dy.png" height="210px" alt="box">
+      </div>
+    </div>
+    <p>Now, when we compute the binarized gradient magnitude image using the finite differences with blurring,
+      we get the below image:
+    </p>
+      <div style="text-align:center">
+				  <p class="image-label">Binarized gradient magnitude image w/ Gaussian Blur:</p>
+				</div>
+				<div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="img/part1/1.3.png" height="250px" alt="cam_bin_gradient">
+        </div>
+      <div class="callout">
+      <strong>Note:</strong> We changed our threshold to 0.11 to make edges more clear.
+      </div>
+      <p>Now the edges look much smoother! We also see reduced noise from applying our Gaussian low-pass filter.</p>
+      <p>Let's try one more thing. We know that convolutions are associative, so instead of convolving 
+        our image with the Gaussian and finite difference matrices separately, let's convolve the Gaussian 
+        and finite differences matrices together first, then convolve that with our image.
+      </p>
+
+      <div class="image-grid-2" style="align-items:center; justify-content:center;">
+        <div class="image-item">
+            <p class="image-label">(a) Convolving Gaussian with $D_x$:</p>
+            <img src="img/part1/1.3b_dx.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">(b) Convolving Gaussian with $D_y$:</p>
+            <img src="img/part1/1.3b_dy.png" height="80px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Image convolved with (a)</p>
+            <img src="img/part1/cam_blur_dx.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Image convolved with (b)</p>
+            <img src="img/part1/cam_blur_dy.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Gradient magnitude image</p>
+            <img src="img/part1/1.3b_grad.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Binarized gradient magnitude image</p>
+            <img src="img/part1/1.3b_compare.png" height="210px" alt="box">
+        </div>
+      </div>
+      <p>As expected, the binarized gradient magnitude image (using the same threshold) 
+        looks identical to the previous!</p>
+
+    <h2 id="part2">Part 2: Fun with Frequencies</h2>
+    <h2 id="part2.1">Image "Sharpening"</h2>
+    <div>
+      <p>
+        For those who don't have the new iPhone 23847 Pro Max, don't you sometimes wish 
+        that your camera quality was better? Introducing image "sharpening"!
+      </p>
+      <p>Images consist of low and high frequencies: lower frequencies correspond to more broad changes 
+        within an image, and higher frequencies correspond to the fine details within an image. To sharpen 
+        our image, we can extract these high frequencies, then add a multiple ( $ >1$) of them back to the original image, 
+        artificially increasing the details within an image. If we want more details, we increase this multiple, 
+        but increasing it too much can make our image look too unrealistic (see below).
+      </p>
+     <p>To extract the high frequencies, we can use a high-pass filter. Or, we can use a low-pass filter, 
+        and subtract the results of the low-pass filter from the original image to obtain the high frequencies. 
+        We'll do the latter, since the Gaussian kernel is a perfect low-pass filter.
+      </p>
+      <p>Here's the equation describing the image sharpening process, where $I_S$ is the sharpened image.</p>
+      <p style="text-align:center">$I_S = I + cI_H = I + c(I - I_L) = I + c (I - GaussConv(I))$</p>
+  
+      <div class="image-grid" style="align-items:center; justify-content:center;">
+        <div class="image-item">
+            <p class="image-label">Original image:</p>
+            <img src="img/part2.1/taj.jpg" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Low-pass on image:</p>
+            <img src="img/part2.1/blurred_taj.png" height="80px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">High-pass (image $-$ low-pass):</p>
+            <img src="img/part2.1/high_taj.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Sharpened with multiple = 2:</p>
+            <img src="img/part2.1/sharpened_taj_2.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Sharpened with multiple = 5:</p>
+            <img src="img/part2.1/sharpened_taj.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Sharpened with multiple = 10:</p>
+            <img src="img/part2.1/sharpened_taj_10.png" height="210px" alt="box">
+        </div>
+      </div>
+      <p>Seems like the sweet spot is around $2 \leq c \leq 5$! The details are more pronounced compared  
+        to the original image, but they aren't too extreme (which happens when $c = 10$).
+      </p>
+
+      <p>Here's another example, using a picture my sister took of our bunny. Her camera quality 
+        isn't the best, but we can sharpen it up from Temu to iPhone quality :)
+      </p>
+
+      <div class="image-grid" style="align-items:center; justify-content:center;">
+        <div class="image-item">
+            <p class="image-label">Original image:</p>
+            <img src="img/part2.1/bunny/bunny.JPG" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Low-pass on image:</p>
+            <img src="img/part2.1/bunny/blurred_bunny.png" height="80px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">High-pass (image $-$ low-pass):</p>
+            <img src="img/part2.1/bunny/high_bunny.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Sharpened with multiple = 2:</p>
+            <img src="img/part2.1/bunny/sharpened_bunny_2.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Sharpened with multiple = 5:</p>
+            <img src="img/part2.1/bunny/sharpened_bunny.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Sharpened with multiple = 10:</p>
+            <img src="img/part2.1/bunny/sharpened_bunny_10.png" height="210px" alt="box">
+        </div>
+      </div>
+
+      <div class="callout">
+          <strong>Note:</strong> The high pass here is a bit hard to see, since only the highest frequencies 
+          are shown. We increased the cutoff for "higher" frequencies because the bunny has a lot of 
+          fine hairs - small tweaks in the cutoff frequencies had larger visual effects. We can see that 
+          the sharpened image with just $c = 2$ already looks quite good, so allowing more "higher" frequencies 
+          will start to make our image look unrealistic.
+        </div>
+
+      <p>Let's try blurring an image, then sharpening the blurred version. What should we expect?</p><div class="image-grid" style="align-items:center; justify-content:center;">
+        <div class="image-item">
+            <p class="image-label">Original image:</p>
+            <img src="img/part2.1/corgi_downsize.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Blurred image:</p>
+            <img src="img/part2.1/corgi_blurred.png" height="80px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Sharpened on blurred image:</p>
+            <img src="img/part2.1/corgi_blurred_sharpened.png" height="210px" alt="box">
+        </div>
+      </div>
+      <p>After blurring, we lose many of the fine details within the image (such as the leaves in the background). 
+        Our sharpening technique cannot recover those lost details - they can only make the existing details 
+        (in the blurred image) more defined. Thus, we see that our sharpened version is not as good as the 
+        original image.
+      </p>
+    </div>
+    
+    <h2 id="part2.2">Hybrid Images</h2>
+    <div>
+        <p>
+					We can also manipulate the frequencies of images to create hybrid images! Hybrid images are images 
+          that show different figures depending on how far the viewer is. To do so, we'll start with two images:
+        </p>
+        <ul>
+          <li>
+              We'll designate Image 1 as the image that's seen when the viewer is close. Being closer allows the viewer to 
+              perceive higher frequencies, so we want Image 1 to consist of higher frequencies. We'll use our tactic 
+              earlier of subtracting the low-pass result from the image to obtain the high-pass result. The threshold 
+              for our "higher" frequencies is determined through experimentation.
+          </li>
+          <br>
+          <li>
+              We'll designate Image 2 as the image that's seen when the viewer is far. Being far means the viewer will be 
+              better at perceiving lower frequencies, so we want Image 2 to consist of lower frequencies. We'll use our 
+              handy dandy Gaussian filter. Again, the threshold for our "lower" frequencies is determined through experimentation.
+          </li>
+          <br>
+          <li>
+              We'll combine Image 1 and Image 2, again with some experimentation. We could directly add them 
+              together, but the results didn't look so nice. Instead, we multiplied each of the images by a constant,
+              then added those together, and that made the final image much nicer to look at!
+          </li>
+			</ul>
+      <div class="image-grid-4" style="align-items:center; justify-content:center;">
+        <div class="image-item">
+            <p class="image-label">Image 1 (seen closer):</p>
+            <img src="img/part2.2/nutmeg_gray.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">FFT of Image 1:</p>
+            <img src="img/part2.2/fft/nutmeg.png" height="80px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">High-pass Image 1:</p>
+            <img src="img/part2.2/nutmeg_high.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">FFT of high-pass:</p>
+            <img src="img/part2.2/fft/nutmeg_high.png" height="80px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Image 2 (seen further):</p>
+            <img src="img/part2.2/derek_gray.png" height="80px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">FFT of Image 2:</p>
+            <img src="img/part2.2/fft/derek.png" height="80px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Low-pass Image 2:</p>
+            <img src="img/part2.2/derek_low.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">FFT of low-pass:</p>
+            <img src="img/part2.2/fft/derek_low.png" height="210px" alt="box">
+        </div>
+      </div>
+
+      <div class="image-grid-2" style="align-items:center; justify-content:center;">
+        <div class="image-item">
+            <p class="image-label">Combined images:</p>
+            <img src="img/part2.2/derek_nutmeg.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">FFT of combined images:</p>
+            <img src="img/part2.2/fft/derek_nutmeg.png" height="80px" alt="box">
+        </div> 
+      </div>
+      <div class="callout">
+          <strong>Note:</strong> For our low-pass cutoff, we used a 32x32 Gaussian kernel with $σ = 15$. 
+          For our high-pass cutoff, we used a 9x9 Gaussian kernel with $σ = 4$. Lastly, we multiplied the 
+          high image by 3.7 (to make it clearer) before adding the two images together.
+      </div>
+      <p>Try looking at the combined image up close! You should be able to see Nutmeg (the cat) and its 
+        fur.
+      </p>
+      <p>Now, if you step back (or squint your eyes and pretend you're blind), you should 
+        be able to see Derek's face.
+      </p> 
+      <div class="callout">
+          <strong>Note:</strong> Originally, our input images weren't perfectly aligned. We needed to first align 
+          them, then perform some cropping to cut out the unnecessary portions of the aligned images. The final 
+          post-aligned-and-cropped image was used above; below are the original and uncropped aligned images.
+      </div>
+      <div class="image-grid-4" style="align-items:center; justify-content:center;">
+        <div class="image-item">
+            <p class="image-label">Image 1:</p>
+            <img src="img/cat.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Image 1 post-alignment:</p>
+            <img src="img/cat_aligned.png" height="80px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Image 2:</p>
+            <img src="img/dp.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Image 2 post-alignment:</p>
+            <img src="img/dp_aligned.png" height="80px" alt="box">
+        </div>
+      </div>
+
+      <p>We've repeated the same process on a different set of images. See if you can guess who the people are!
+        Spoiler alert: scroll further below to see the original images.
+      </p>
+
+      <div class="image-grid-2" style="align-items:center; justify-content:center;">
+        <div class="image-item">
+            <p class="image-label">Combined images:</p>
+            <img src="img/part2.2/jj_jay.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">FFT of combined images:</p>
+            <img src="img/part2.2/fft/jj_jay.png" height="80px" alt="box">
+        </div> 
+      </div>
+      <div class="callout">
+          <strong>Note:</strong> For our low-pass cutoff, we used a 32x32 Gaussian kernel with $σ = 15$. 
+          For our high-pass cutoff, we used a 9x9 Gaussian kernel with $σ = 4$. Lastly, we multiplied the 
+          high image by 3.7 (to make it clearer) before adding the two images together.
+      </div>
+      <p>Who do you see up close? (Hint: bro is literally the King of Mandopop!!)
+      </p>
+      <p>Who do you see when you're farther away? (Hint: his world tour was just this year (2025)!)
+      </p> 
+
+      <div class="image-grid-4" style="align-items:center; justify-content:center;">
+        <div class="image-item">
+            <p class="image-label">Image 1 (seen closer):</p>
+            <img src="img/part2.2/jay_gray.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">FFT of Image 1:</p>
+            <img src="img/part2.2/fft/jay_chou.png" height="80px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">High-pass Image 1:</p>
+            <img src="img/part2.2/jay_high.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">FFT of high-pass:</p>
+            <img src="img/part2.2/fft/jay_high.png" height="80px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Image 2 (seen further):</p>
+            <img src="img/part2.2/jj_gray.png" height="80px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">FFT of Image 2:</p>
+            <img src="img/part2.2/fft/jj.png" height="80px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Low-pass Image 2:</p>
+            <img src="img/part2.2/jj_low.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">FFT of low-pass:</p>
+            <img src="img/part2.2/fft/jj_low.png" height="210px" alt="box">
+        </div>
+      </div>
+
+      <p><strong>Image set 3:</strong></p>
+      <div class="image-grid" style="align-items:center; justify-content:center;">
+        <div class="image-item">
+            <p class="image-label">Image 1 (seen closer):</p>
+            <img src="img/part2.2/deer_gray.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Image 2 (seen further):</p>
+            <img src="img/part2.2/zebra_gray.png" height="80px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Combined images: </p>
+            <img src="img/part2.2/zebra_deer.png" height="210px" alt="box">
+        </div>
+      </div>
+      <div class="callout">
+          <strong>Note:</strong> For our low-pass cutoff, we used a 20x20 Gaussian kernel with $σ = 6$. 
+          For our high-pass cutoff, we used a 4x4 Gaussian kernel with $σ = 1$. Lastly, we multiplied the 
+          high image by 3.7 (to make it clearer) before adding the two images together.
+      </div>
+
+      <p><strong>Image set 4:</strong></p>
+      <div class="image-grid" style="align-items:center; justify-content:center;">
+        <div class="image-item">
+            <p class="image-label">Image 1 (seen closer):</p>
+            <img src="img/part2.2/sprout_gray.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Image 2 (seen further):</p>
+            <img src="img/part2.2/tree_gray.png" height="80px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Combined images: </p>
+            <img src="img/part2.2/sprout_tree.png" height="210px" alt="box">
+        </div>
+      </div>
+      <div class="callout">
+          <strong>Note:</strong> For our low-pass cutoff, we used a 15x15 Gaussian kernel with $σ = 8$. 
+          For our high-pass cutoff, we used a 4x4 Gaussian kernel with $σ = 1$. Lastly, we multiplied the 
+          high image by 3.7 (to make it clearer) before adding the two images together.
+      </div>
+    </div>
+
+    <h2 id="part2.3">Gaussian and Laplacian Stacking</h2>
+		<div>
+      <p>What if we want to blend images? The naive way would be just to paste them together. 
+      If we try to blend an apple and orange this way...</p>
+      <div class="img-container" style="align-items:center; justify-content:center;">
+          <img src="img/part2.3/bad_oraple.png" height="250px" alt="cam_bin_gradient">
+      </div>
+      <p>Yikes!</p>
+      <p>We'll see how we can improve this using Gaussian and Laplacian stacking!</p>
+
+      <ul>
+          <li>
+              First, we must make a Gaussian stack per image, where each level of the stack is 
+              the original image convolved with a Gaussian filter, who's dimensions and sigma increase 
+              as we go down the stack. In essence, we are getting the lowest frequencies, then the 
+              next lowest, etc. We'll also do this with our mask.
+          </li>
+          <br>
+          <li>
+              Why did we make the Gaussian stack? We're actually going to use our Gaussian stack to make our 
+              Laplacian stack, which we will use for the blending. Recall that the Laplacian (high-pass) can be found by just 
+              subtracting the Gaussian (low-pass) from the original. From our Gaussian stack, we'll get each level of 
+              the Laplacian stack by subtracting the $(i+1)^{th}$ Gaussian level from the $(i)^{th}$ Gaussian level. 
+              Our Laplacian stack gives us the highest frequencies, then the next highest, etc.
+          </li>
+          <br>
+          <li>
+              Once we have our Laplacian stacks from our two images, we can apply our mask (a Gaussian stack) to each level. 
+              We'll apply the binary mask (first level of our Gaussian stack) to our highest frequencies, the next mask 
+              (second level of our Gaussian stack) to our next-highest frequencies, etc. This ensures that we get a smoother 
+              blend for the lower frequencies, and more of a concatenation for our higher frequencies (we don't want to lose detail).
+          </li>
+          <br>
+          <li>
+              Once we're done, we add up all the levels of our Laplacian (+ the lowest level of the Gaussian; 
+              think about why!), and we get our reconstructed image.
+          </li>
+			</ul>
+      
+				<div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="img/part2.3/oraple_pyramid.png" height="350px" alt="cam_bin_gradient">
+        </div>
+
+        <p>Final result:</p>
+        <div class="img-container" style="align-items:center; justify-content:center;">
+          <img src="img/part2.3/oraple.png" height="250px" alt="cam_bin_gradient">
+      </div>
+      <!-- <div style="text-align:center">
+				  <p class="image-label">Binarized gradient magnitude image w/ Gaussian Blur:</p>
+				</div>
+				<div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="img/part1/1.3.png" height="250px" alt="cam_bin_gradient">
+        </div> -->
+    </div>
+
+    <h2 id="part2.4">Multiresolution Blending</h2>
+		<div>
+      <p>Let's use our strategy from before to blend some more images!</p>
+      <p>Here's a wonky picture of my sister:</p>
+        <div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="img/part2.4/bendy.png" height="250px" alt="cam_bin_gradient">
+        </div>
+        <p>The weird angle + bendiness reminded me of astronauts (for some reason), so I 
+          decided to change her background to be more space-themed. Below is the spacey background 
+          replacement image I chose, as well as the mask:
+        </p>
+        <div class="image-grid-2" style="align-items:center; justify-content:center;">
+          <div class="image-item">
+              <p class="image-label">Spacey background:</p>
+              <img src="img/part2.4/blueee.png" height="350px" alt="box">
+          </div>
+          <div class="image-item">
+              <p class="image-label">Mask</p>
+              <img src="img/part2.4/bend_mask.png" height="350px" alt="box">
+          </div>
+        </div>
+        <div class="callout">
+          <strong>Note:</strong> I only cared about the top left corner of the spacey background image, 
+          which is why there's garbage in other sections of the image...
+        </div>
+        <p>And the same plot from before to visualize the process:</p>
+        <div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="img/part2.4/bendy_plot.png" height="350px" alt="cam_bin_gradient">
+        </div>
+        <p>And the final result!</p>
+        <div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="img/part2.4/claire_sky.png" height="350px" alt="cam_bin_gradient">
+        </div>
+
+        <p>One more blend demo!</p>
+        <p>Here's a picture of someone's lunch(?):</p>
+        <div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="img/part2.4/chkn.png" height="250px" alt="cam_bin_gradient">
+        </div>
+        <p>What if, instead of chicken nuggets, you wanted churro nuggets..? Let's replace 
+          our chicken nuggets with the following picture of churros.
+        </p>
+        <div class="image-grid-2" style="align-items:center; justify-content:center;">
+          <div class="image-item">
+              <p class="image-label">Churros</p>
+              <img src="img/part2.4/churro.png" height="350px" alt="box">
+          </div>
+          <div class="image-item">
+              <p class="image-label">Mask</p>
+              <img src="img/part2.4/chkn_mask.png" height="350px" alt="box">
+          </div>
+        </div> 
+        <p>And the same plot from before to visualize the process:</p>
+        <div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="img/part2.4/chkn_plot.png" height="350px" alt="cam_bin_gradient">
+        </div>
+        <p>And the final result!</p>
+        <div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="img/part2.4/churro_nuggets.png" height="350px" alt="cam_bin_gradient">
+        </div>
+        <p>Looks a bit cardboard-y and artificial, but I'd still eat it...</p>
+    </div>
+</div>
+  
+<script src="script.js"></script>
+
+</body>
+</html>
