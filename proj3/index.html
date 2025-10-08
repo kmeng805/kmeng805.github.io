@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Proj 3</title>
+  <link rel="stylesheet" href="proj3.css">
+
+	<script type="text/x-mathjax-config">
+		MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+	</script>
+	<script type="text/javascript"
+		src="http://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+	</script>
+  <!-- Link to Prism CSS -->
+	<link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+
+	<!-- Link to Prism JS -->
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+
+</head>
+<body>
+  <nav class="sidebar">
+    <br>
+    <h2><a href="../index.html">Home</a></h2>
+    <br>
+    <button id="dark-mode-toggle">Dark Mode</button>
+    <h2>Table of Contents</h2>
+    <ul>
+			<!-- <li><a href="#part1">Overview</a></li> -->
+      <li><a href="#part1">Part 1: Image Warping & Mosaicing</a></li>
+        <ul>
+            <li><a href="#part1.1">Shooting our Pictures</a></li>
+            <li><a href="#part1.2">Finite Difference Operator</a></li>
+            <li><a href="#part1.3">Derivative of Gaussian</a></li>
+        </ul>
+      </li>
+      <li><a href="#part2">Part 2: Fun with Frequencies</a>
+        <ul>
+            <li><a href="#part2.1">Image Sharpening</a></li>
+            <li><a href="#part2.2">Hybrid Images</a></li>
+            <li><a href="#part2.3">Gaussian and Laplacian</a></li>
+            <li><a href="#part2.4">Multiresolution Blending</a></li>
+        </ul>
+      </li>
+      
+    </ul>  
+  </nav>
+
+  <div class="main">
+    <h1>Project 3: [Auto]Stitching Photo Mosaics</h1>
+
+		<div>
+			<!-- <h2 id="part0">Overview</h2>
+    	<div class="img-container">
+				<p class="text-desc">todo</p>
+			</div> -->
+			<p style="font-size: 13px; font-style: italic;">
+					*Although this is written in first-person plural (just preference), the project was completed by myself individually.
+			</p>
+		</div>
+
+		<h2 id="part1">Image Warping & Mosaicing</h2>
+
+    <h2 id="part1.1">Shooting our Pictures</h2>
+		<div>
+			<p> 
+				Fixed COP & rotation
+			</p>
+            <div class="image-grid-2" style="align-items:center; justify-content:center;">
+                <div class="image-item">
+                    <p class="image-label">Hearst Mining (angled left):</p>
+                    <img src="img/hearst_left.png" height="210px" alt="box">
+                </div>
+                <div class="image-item">
+                    <p class="image-label">Hearst Mining (angled straight):</p>
+                    <img src="img/hearst_mid.png" height="80px" alt="box">
+                </div>
+                <div class="image-item">
+                    <p class="image-label">Railroad (angled straight):</p>
+                    <img src="img/rr_left.png" height="210px" alt="box">
+                </div>
+                <div class="image-item">
+                    <p class="image-label">Railroad (angled right):</p>
+                    <img src="img/rr_right.png" height="210px" alt="box">
+                </div>
+                <div class="image-item">
+                    <p class="image-label">Boba (angled left)</p>
+                    <img src="img/akira_left.png" height="210px" alt="box">
+                </div>
+                <div class="image-item">
+                    <p class="image-label">Boba (angled straight)</p>
+                    <img src="img/akira_right.png" height="210px" alt="box">
+                </div>
+            </div>
+        </div>
+    
+    <h2 id="part1.2">Recovering Homographies</h2>
+        <div>
+            <p>Setting up our Ax = b to solve for x, our homography matrix (as a vector)</p>
+            <div class="img-container" style="align-items:center; justify-content:center;">
+                <img src="img/a2/homography_matrix.png" height="200px" alt="cam_conv_dx">
+                <img src="img/a2/homography_vector.png" height="200px" alt="cam_conv_dx"> $=$ 
+                <img src="img/a2/result_vector.png" height="200px" alt="cam_conv_dx">
+            </div>
+
+            <p>Step 1: Find Correspondencies</p>
+            <div class="image-grid-2" style="align-items:center; justify-content:center;">
+                <div class="image-item">
+                    <p class="image-label">Left Image Points:</p>
+                    <img src="img/a2/akira_left_pts.png" height="210px" alt="box">
+                </div>
+                <div class="image-item">
+                    <p class="image-label">Right Image Points:</p>
+                    <img src="img/a2/akira_right_pts.png" height="80px" alt="box">
+                </div>
+            </div>
+
+            <p>Akira's (x,y) and (u,v) points, respectively:</p>
+            <div class="img-container" style="align-items:center; justify-content:center;">
+                $(u, v) $<img src="img/a2/akira_left_pts_raw.png" height="200px" alt="cam_conv_dx">, $(x, y): $
+                <img src="img/a2/akira_right_pts_raw.png" height="200px" alt="cam_conv_dx">
+            </div>
+
+            <p>Step 2: Plug into A and b, then solve for the homography. Append a 1 to the homography 
+                for the scaling factor (choose 1 because of how we picked values in our A matrix).
+            </p>
+            <div class="img-container" style="align-items:center; justify-content:center;">
+                <img src="img/a2/akira_matrix.png" height="300px" alt="cam_conv_dx">
+                <img src="img/a2/akira_h_vector.png" height="200px" alt="cam_conv_dx"> $=$ 
+                (vector of $u_i$ and $v_i$ from values above)
+            </div>
+
+            <p>Step 3: apply obtained homography matrix to our image. In this case, we're warping the 
+                left image (x, y points) to the right image (u, v points). We notice that the points 
+                in the warped left image and in the right image now line up relative to each other!
+            </p>
+
+            <div class="image-grid-2" style="align-items:center; justify-content:center;">
+                <div class="image-item">
+                    <p class="image-label">Left Image, Warped:</p>
+                    <img src="img/a2/akira_warp_with_pts.png" height="210px" alt="box">
+                </div>
+                <div class="image-item">
+                    <p class="image-label">Right Image (Unmodified):</p>
+                    <img src="img/a2/akira_right_pts.png" height="80px" alt="box">
+                </div>
+            </div>
+            <p>Here's a zoomed in version of the above images, so you can actually see that the points line up!</p>
+
+            <div class="image-grid-2" style="align-items:center; justify-content:center;">
+                <div class="image-item">
+                    <p class="image-label">Left Image, Warped (Zoom):</p>
+                    <img src="img/a2/akira_warp_pts_zoom.png" height="210px" alt="box">
+                </div>
+                <div class="image-item">
+                    <p class="image-label">Right Image (Unmodified, Zoom):</p>
+                    <img src="img/a2/akira_right_pts_zoom.png" height="80px" alt="box">
+                </div>
+            </div>
+            
+            <p>(So how do we actually line up the warped left image and the right image? 
+                We'll cover that below in "Mosaicing"!)</p>
+            <p>TODO: repaste prev images (made them black background instead of clear but didn't update website for 3a)</p>
+        </div>
+    <h2 id="part1.3">Warping Images</h2>
+    <div>
+        <p>Earlier, how did we apply our homographic matrix to our image? We considered two methods:</p>
+        <ul>
+            <li>Nearest Neighbor Interpolation:
+                <!-- <ul><li>hello</li></ul> -->
+                 <p>Pros: faster, doesn't hallucinate (no new colors)</p>
+                 <p>Cons: can result in sharp edge artifacts</p>
+            </li>
+            <li>Bilinear Interpolation:
+                <p>Pros: better transitions (no unwanted sharp artifacts)</p>
+                 <p>Cons: slower, hallucinates</p>
+            </li>
+        </ul>
+
+        <p>With homographies, we can also rectify images. </p>
+        <div class="image-grid" style="align-items:center; justify-content:center;">
+            <div class="image-item">
+                <p class="image-label">Box of Tea (Original):</p>
+                <img src="img/rect/matcha_orig.png" height="210px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">NN:</p>
+                <img src="img/rect/matcha_rect_nn.png" height="80px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">Bilinear:</p>
+                <img src="img/rect/matcha_rect_bil.png" height="210px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">Akira Window (Original):</p>
+                <img src="img/rect/akira_orig.png" height="210px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">NN:</p>
+                <img src="img/rect/akira_window_rect_nn.png" height="210px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">Bilinear:</p>
+                <img src="img/rect/akira_window_rect_bil.png" height="210px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">Berkeley Seal (Original):</p>
+                <img src="img/rect/seal_orig.png" height="210px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">NN:</p>
+                <img src="img/rect/seal_rect_nn.png" height="210px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">Bilinear:</p>
+                <img src="img/rect/seal_rect_bil.png" height="210px" alt="box">
+            </div>
+        </div>
+        
+    </div>
+    <h2 id="part1.4">Mosaicing</h2>
+    <p>After warping an image, how can we stitch it together to another?</p>
+    <p>Step 1: pad warped im2 and original im1 such that 
+        1) the minimum and maximum x and y coords are captured, and 
+        2) the (x, y) and (u, v) points line up
+    </p>
+    <div class="image-grid-2" style="align-items:center; justify-content:center;">
+        <div class="image-item">
+            <p class="image-label">Left, Warped:</p>
+            <img src="img/akira_left.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Left, Warped + Padded:</p>
+            <img src="img/mosaic/akira_left_padded.png" height="80px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Right, Original:</p>
+            <img src="img/akira_right.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Right, Warped + Padded:</p>
+            <img src="img/mosaic/akira_right_padded.png" height="210px" alt="box">
+        </div>
+    </div>
+    <p>Step 2: apply masks to the images (binary alpha mask, or linear alpha mask)</p>
+    <p>Binary alpha mask: for overlap region, values are 0.5 from left image and 0.5 from right image</p>
+    <p>Linear alpha mask: for overlap region, an image will have more weight on columns it is closer to</p>
+    <div class="image-grid" style="align-items:center; justify-content:center;">
+        <div class="image-item">
+            <p class="image-label">Left:</p>
+            <img src="img/akira_left.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Left w/ Binary Alpha:</p>
+            <img src="img/blend/akira_bin_left.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Left w/ Linear Alpha:</p>
+            <img src="img/blend/akira_lin_left.png" height="80px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Right:</p>
+            <img src="img/akira_right.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Right w/ Binary Alpha:</p>
+            <img src="img/blend/akira_bin_right.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Right w/ Linear Alpha</p>
+            <img src="img/blend/akira_lin_right.png" height="210px" alt="box">
+        </div>
+    </div>
+    
+    <p>Step 3: add the results together!</p>
+    <div class="image-grid" style="align-items:center; justify-content:center;">
+        <div class="image-item">
+            <p class="image-label">Naive Adding :( (but cool colors)</p>
+            <img src="img/mosaic/akira_naive_sum.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Binary Alpha Mask:</p>
+            <img src="img/mosaic/akira_bin_merge.png" height="80px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Linear Alpha Mask:</p>
+            <img src="img/mosaic/akira_lin_merge.png" height="210px" alt="box">
+        </div>
+    </div>
+    <div class="image-grid-4" style="align-items:center; justify-content:center;">
+        <div class="image-item">
+            <p class="image-label">Left Image</p>
+            <img src="img/mosaic/hearst_left.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Right Image</p>
+            <img src="img/mosaic/hearst_mid.png" height="80px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Binary Alpha Merge</p>
+            <img src="img/mosaic/hearst_bin_merge.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Linear Alpha Merge</p>
+            <img src="img/mosaic/hearst_lin_merge.png" height="210px" alt="box">
+        </div>
+
+        <div class="image-item">
+            <p class="image-label">Left Image</p>
+            <img src="img/rr_left.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Right Image</p>
+            <img src="img/rr_right.png" height="80px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Binary Alpha Merge</p>
+            <img src="img/mosaic/rr_bin_merge.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Linear Alpha Merge</p>
+            <img src="img/mosaic/rr_lin_merge.png" height="210px" alt="box">
+        </div>
+    </div>
+  </div>
+  
+<script src="script.js"></script>
+
+</body>
+</html>
