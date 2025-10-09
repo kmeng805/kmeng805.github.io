@@ -61,12 +61,13 @@
 			</p>
 		</div>
 
-		<h2 id="part1">Image Warping & Mosaicing</h2>
+		<h2 id="part1">Part 1: Image Warping & Mosaicing</h2>
 
     <h2 id="part1.1">Shooting our Pictures</h2>
 		<div>
 			<p> 
-				Fixed COP & rotation
+                Consider the below pairs of images, which are taken from the same center of projection (COP), 
+                with one being rotated at more of an angle.
 			</p>
             <div class="image-grid-2" style="align-items:center; justify-content:center;">
                 <div class="image-item">
@@ -94,46 +95,117 @@
                     <img src="img/akira_right.png" height="210px" alt="box">
                 </div>
             </div>
+            <p> 
+                The goal for this part of the project is to combine these images together (panoramic stitching), 
+                and we'll walk through the steps for how to do so!
+			</p>
         </div>
     
     <h2 id="part1.2">Recovering Homographies</h2>
         <div>
-            <p>Setting up our Ax = b to solve for x, our homography matrix (as a vector)</p>
+            <p>
+                To stitch our images together, we first need to figure out warp one of the images to 
+                fit the other. Taking the above boba example, we cannot simply glue the two images 
+                together (even after doing some preliminary cropping), otherwise it will be obvious 
+                that the two images were taken from different angles.
+            </p>
+            <h3 id="part1.2">Step 1: Find Correspondencies</h2>
+                <p>
+                    We start by finding the correspondencies between the two images, manually selecting points 
+                    that are easily identifiable (e.g. corners) & appear in both images.
+                </p>
+                <div class="callout">
+                    <strong>Note:</strong> In part 2, we'll figure out how to find these points automatically.
+                </div>
+
+                <p>From the boba image from earlier, we selected the below points, numbered in red (9 total). 
+                    All the points appear in both images (e.g. the left tops of the cabinet handles), and 
+                    all points are easily identifiable (to reduce human error when selecting the corresponding 
+                    point).
+                </p>
+
+                <div class="image-grid-2" style="align-items:center; justify-content:center;">
+                    <div class="image-item">
+                        <p class="image-label">Left Image Points:</p>
+                        <img src="img/a2/akira_left_pts.png" height="210px" alt="box">
+                    </div>
+                    <div class="image-item">
+                        <p class="image-label">Right Image Points:</p>
+                        <img src="img/a2/akira_right_pts.png" height="80px" alt="box">
+                    </div>
+                </div>
+
+                <p>
+                    Here are the left image's and right image's point coordinates, respectively. We'll 
+                    call the left image's points (x, y), and the right image's points (u, v).</p>
+                <div class="img-container" style="align-items:center; justify-content:center;">
+                    $(u, v)= $<img src="img/a2/akira_left_pts_raw.png" height="200px" alt="cam_conv_dx">, $(x, y)= $
+                    <img src="img/a2/akira_right_pts_raw.png" height="200px" alt="cam_conv_dx">
+                </div>
+
+            <h3>Detour: Homography Matrix</h3>
+                <p>Turns out, warping our image is just a linear transformation of our pixels! We also call this 
+                    a homography, and we represent our transformation as a homography matrix that can be applied 
+                    to every pixel (hence the "linear" in linear transformation).
+                </p>
+                <p>To transform our (x, y) coordinate to (u, v), we can multiply it by our homography matrix:</p>
+                <div class="img-container" style="align-items:center; justify-content:center;">
+                    <img src="img/a2/homography.png" height="80px" alt="cam_conv_dx">
+                </div>
+
+                <p>We can fix the last element of our homography matrix ($i$) to 1, since this is just a scaling factor. 
+                    Then, taking the above matrix and solving for $u$ and $v$, we obtain the following equation. $h$ is a 
+                    vector containing $a$ through $h$.
+                </p>
+                <div class="img-container" style="align-items:center; justify-content:center;">
+                    <img src="img/a2/solving.png" height="60px" alt="cam_conv_dx">
+                </div>
+
+            <p>
+                Below is a generalized version of our $Ah = b$, where we have multiple correspondencies selected, 
+                making our $A$ matrix tall (two rows per correspondence). 
+                We can then use least squares to solve for $h$ (which will be homography matrix). 
+            </p>
             <div class="img-container" style="align-items:center; justify-content:center;">
                 <img src="img/a2/homography_matrix.png" height="200px" alt="cam_conv_dx">
                 <img src="img/a2/homography_vector.png" height="200px" alt="cam_conv_dx"> $=$ 
                 <img src="img/a2/result_vector.png" height="200px" alt="cam_conv_dx">
             </div>
-
-            <p>Step 1: Find Correspondencies</p>
-            <div class="image-grid-2" style="align-items:center; justify-content:center;">
-                <div class="image-item">
-                    <p class="image-label">Left Image Points:</p>
-                    <img src="img/a2/akira_left_pts.png" height="210px" alt="box">
-                </div>
-                <div class="image-item">
-                    <p class="image-label">Right Image Points:</p>
-                    <img src="img/a2/akira_right_pts.png" height="80px" alt="box">
-                </div>
+            
+            <div class="callout">
+                <strong>Note:</strong> We need to select at least 4 pairs of points, since our homography matrix 
+                has 8 degrees of freedom (a-h, and i is a scaling constant).
             </div>
-
-            <p>Akira's (x,y) and (u,v) points, respectively:</p>
-            <div class="img-container" style="align-items:center; justify-content:center;">
-                $(u, v) $<img src="img/a2/akira_left_pts_raw.png" height="200px" alt="cam_conv_dx">, $(x, y): $
-                <img src="img/a2/akira_right_pts_raw.png" height="200px" alt="cam_conv_dx">
-            </div>
-
-            <p>Step 2: Plug into A and b, then solve for the homography. Append a 1 to the homography 
-                for the scaling factor (choose 1 because of how we picked values in our A matrix).
+            
+            <h3>Step 2: Solving for Homography Matrix</h3>
+            <p>Going back to our boba example, we have our (x, y) and (u, v) points, so we can 
+                plug them directly into our equation and solve for our homography matrix!
             </p>
+            <ul>
+                <li>
+                    Using the format $Ah = b$, we know all the values in $A$ and $b$, so we can solve for 
+                    all the values in $h$ using least squares.
+                </li>
+                <li>
+                    By construction, $h$ is a vector form of our homography matrix, without the $9^{th}$ element 
+                    (scaling factor), 1. 
+                    Thus, we append $1$ to $h$, then reshape it to $3x3$ to get our homography matrix.
+                </li>
+            </ul>
             <div class="img-container" style="align-items:center; justify-content:center;">
                 <img src="img/a2/akira_matrix.png" height="300px" alt="cam_conv_dx">
                 <img src="img/a2/akira_h_vector.png" height="200px" alt="cam_conv_dx"> $=$ 
                 (vector of $u_i$ and $v_i$ from values above)
             </div>
+            <p>Homography matrix:</p>
+            <div class="img-container" style="align-items:center; justify-content:center;">
+                <img src="img/a2/akira_H_Matrix.png" height="60px" alt="cam_conv_dx">
+            </div>
 
-            <p>Step 3: apply obtained homography matrix to our image. In this case, we're warping the 
-                left image (x, y points) to the right image (u, v points). We notice that the points 
+            <h3>Step 3: Applying the Homography Matrix</h3>
+            <p>Now that we've obtained our homography matrix, let's apply it to our image to verify that 
+                it works! Going back to the boba example, we'll apply the homography matrix to our left image, 
+                warping the left image (x, y points) to the right image (u, v points). We notice that the points 
                 in the warped left image and in the right image now line up relative to each other!
             </p>
 
@@ -147,39 +219,56 @@
                     <img src="img/a2/akira_right_pts.png" height="80px" alt="box">
                 </div>
             </div>
-            <p>Here's a zoomed in version of the above images, so you can actually see that the points line up!</p>
+            <p>Here's a zoomed in version of the above images, so you can actually see that the points line up, 
+                and that the images look like they're taken from one angle.
+            </p>
 
             <div class="image-grid-2" style="align-items:center; justify-content:center;">
                 <div class="image-item">
                     <p class="image-label">Left Image, Warped (Zoom):</p>
-                    <img src="img/a2/akira_warp_pts_zoom.png" height="210px" alt="box">
+                    <img src="img/a2/akira_warp_pts_zoom.png" height="100px" alt="box">
                 </div>
                 <div class="image-item">
                     <p class="image-label">Right Image (Unmodified, Zoom):</p>
-                    <img src="img/a2/akira_right_pts_zoom.png" height="80px" alt="box">
+                    <img src="img/a2/akira_right_pts_zoom.png" height="100px" alt="box">
                 </div>
             </div>
             
             <p>(So how do we actually line up the warped left image and the right image? 
                 We'll cover that below in "Mosaicing"!)</p>
-            <p>TODO: repaste prev images (made them black background instead of clear but didn't update website for 3a)</p>
         </div>
     <h2 id="part1.3">Warping Images</h2>
     <div>
-        <p>Earlier, how did we apply our homographic matrix to our image? We considered two methods:</p>
+        <p>Earlier, how did we apply our homography matrix to our image? We cannot simply apply the 
+            homography to every pixel in our original image, then map it to the location in our warped image. 
+            For some intuition as to why, image if our warped image's dimensions were much bigger. Then, not every 
+            pixel in our warped image will be filled, if we mapped every input pixel to it.
+        </p>
+        <p>Instead of forward warping, we'll use inverse warping! That way, we won't have unfilled holes in our 
+            warped image, since we're reverse mapping from the warped pixel to the original pixel(s). First, we'll find the 
+            inverse of our $H$ matrix, to find where every warped pixel "lands" in our original image. Then, we'll interpolate 
+            the value based on the nearby landed pixels (since our "landing" spot isn't always a perfect integer coordinate).
+            We'll consider two methods for interpolation:
+        </p>
         <ul>
-            <li>Nearest Neighbor Interpolation:
+            <li>Nearest Neighbor Interpolation: we round our "landing" (x, y) to the nearest integer, then use that pixel's value.
                 <!-- <ul><li>hello</li></ul> -->
-                 <p>Pros: faster, doesn't hallucinate (no new colors)</p>
-                 <p>Cons: can result in sharp edge artifacts</p>
+                 <p>   - Pros: NN is faster, since we only consider one value per pixel (no averaging). 
+                    NN also doesn't hallucinate, meaning that all colors shown are colors that are present in the original image.</p>
+                 <p>   - Cons: NN can result sharp edge artifacts, such as unwanted edges when interpolating a curve.</p>
             </li>
-            <li>Bilinear Interpolation:
-                <p>Pros: better transitions (no unwanted sharp artifacts)</p>
-                 <p>Cons: slower, hallucinates</p>
+            <li>Bilinear Interpolation: we'll find the four pixels neighboring our "landing" position, then take their weighted 
+                average depending on their x and y distances from the "landing" position.
+                <p>- Pros: Bilinear gives better/smoother transitions, i.e. no unwanted sharp artifacts.</p>
+                 <p>- Cons: Bilinear is slower because of the averaging. Because it has smoother results, it 
+                    may have worser results if sharp edges are desired.</p>
             </li>
         </ul>
 
-        <p>With homographies, we can also rectify images. </p>
+        <p>Below are some examples of images we rectify with homographies, using both NN and bilinear interpolation. 
+            We performed the rectification by picking an object in the image that has a known shape (e.g. a window should 
+            be shaped as a rectangle), then choosing the resulting (u, v) points based on that known shape.
+        </p>
         <div class="image-grid" style="align-items:center; justify-content:center;">
             <div class="image-item">
                 <p class="image-label">Box of Tea (Original):</p>
@@ -206,6 +295,18 @@
                 <img src="img/rect/akira_window_rect_bil.png" height="210px" alt="box">
             </div>
             <div class="image-item">
+                <p class="image-label">Physics Building (Original):</p>
+                <img src="img/rect/phys_downscaled.png" height="210px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">NN:</p>
+                <img src="img/rect/phys_rect_nn.png" height="80px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">Bilinear:</p>
+                <img src="img/rect/phys_rect_bil.png" height="210px" alt="box">
+            </div>
+            <div class="image-item">
                 <p class="image-label">Berkeley Seal (Original):</p>
                 <img src="img/rect/seal_orig.png" height="210px" alt="box">
             </div>
@@ -218,6 +319,32 @@
                 <img src="img/rect/seal_rect_bil.png" height="210px" alt="box">
             </div>
         </div>
+        <p>In the above images, it's a bit difficult to see the difference between NN 
+            and bilinear interpolation, since our image dimensions were relatively large. It seems preferable to 
+            use NN interpolation, just because it's faster and doesn't look different compared to the bilinear 
+            interpolation result.</p>
+        <div class="callout">
+            <strong>Note:</strong> Out of curiosity, we zoomed in on some detailed sections of the two interpolations 
+            (using the Akira window image). The left sides are using NN, and the right sides are from using bilinear.
+            <div class="img-container" style="align-items:center; justify-content:center;">
+                <p class="image-label">Barcode:</p>
+                <img src="img/rect/barcode.png" height="140px" alt="box">
+            </div>
+            <p>The NN image actually looks a bit nicer than the bilinear image, since we want barcode lines to 
+                be sharp! However, we can see some edge artifacts in both images (likely due to the homography 
+                itself), and those are more obvious in the NN image.</p>
+            <div class="img-container" style="align-items:center; justify-content:center;">
+                <p class="image-label">Shrub + Cups:</p>
+                <img src="img/rect/akira_nn_vs_bil.png" height="140px" alt="box">
+            </div>
+            <p>Again, we see that the NN image is sharper, though it could be argued that the bilinear image 
+                looks more natural (the shrub is more smoothly colored). But, as mentioned before, 
+                since this is such a small part of our 
+                image, the tiny differences don't make a significant visual difference - can you spot these differences 
+                clearly in the original image?
+            </p>
+        </div>
+
         
     </div>
     <h2 id="part1.4">Mosaicing</h2>
