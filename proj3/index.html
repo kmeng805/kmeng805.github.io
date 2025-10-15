@@ -36,12 +36,12 @@
             <li><a href="#part1.4">Mosaicing</a></li>
         </ul>
       </li>
-      <li><a href="#part2">Part 2: Coming Not Soon</a>
+      <li><a href="#part2">Part 2: Feature Matching for Autostitching</a>
         <ul>
-            <!-- <li><a href="#part2.1">Image Sharpening</a></li>
-            <li><a href="#part2.2">Hybrid Images</a></li>
-            <li><a href="#part2.3">Gaussian and Laplacian</a></li>
-            <li><a href="#part2.4">Multiresolution Blending</a></li> -->
+            <li><a href="#part2.1">Harris Corner Detection & ANMS</a></li>
+            <li><a href="#part2.2">Feature Descriptor Extraction</a></li>
+            <li><a href="#part2.3">Feature Matching</a></li>
+            <li><a href="#part2.4">RANSAC</a></li>
         </ul>
       </li>
       
@@ -61,7 +61,7 @@
 			</p>
 		</div>
 
-		<h2 id="part1">Part 1: Image Warping & Mosaicing</h2>
+	<h2 id="part1">Part 1: Image Warping & Mosaicing</h2>
 
     <h2 id="part1.1">Shooting our Pictures</h2>
 		<div>
@@ -79,12 +79,12 @@
                     <img src="img/hearst_mid.png" height="80px" alt="box">
                 </div>
                 <div class="image-item">
-                    <p class="image-label">Railroad (angled straight):</p>
-                    <img src="img/rr_left.png" height="210px" alt="box">
+                    <p class="image-label">Amtrak Stop (angled left):</p>
+                    <img src="img/amtrak_left.png" height="210px" alt="box">
                 </div>
                 <div class="image-item">
-                    <p class="image-label">Railroad (angled right):</p>
-                    <img src="img/rr_right.png" height="210px" alt="box">
+                    <p class="image-label">Amtrak Stop (angled straight):</p>
+                    <img src="img/amtrak_right.png" height="210px" alt="box">
                 </div>
                 <div class="image-item">
                     <p class="image-label">Boba (angled left)</p>
@@ -349,77 +349,168 @@
     </div>
     <h2 id="part1.4">Mosaicing</h2>
     <p>After warping an image, how can we stitch it together to another?</p>
-    <p>Step 1: pad warped im2 and original im1 such that 
-        1) the minimum and maximum x and y coords are captured, and 
-        2) the (x, y) and (u, v) points line up
+    <p>As you may have noticed earlier, even if we warp one of our images to match the other, the two images 
+        still aren't aligned yet! In other words, we need to figure out how to overlay them such that they 
+        form one complete picture, a mosaic.
     </p>
+    <h3 id="part1.2">Step 1: Padding our Images</h2>
+    <p>First, we need to pad our images (specifically in the x and y directions) such that they have 
+        the same dimensions. The padding should be done such that:
+        <ul>
+            <li>the minimum and maximum x and y coordinates from both images are captured, and </li>
+            <li>the (x, y) and (u, v) points line up when the two images are stacked together.</li>
+        </ul>
+    </p>
+        
     <div class="image-grid-2" style="align-items:center; justify-content:center;">
         <div class="image-item">
             <p class="image-label">Left, Warped:</p>
-            <img src="img/akira_left.png" height="210px" alt="box">
-        </div>
-        <div class="image-item">
-            <p class="image-label">Left, Warped + Padded:</p>
-            <img src="img/mosaic/akira_left_padded.png" height="80px" alt="box">
+            <img src="img/a2/akira_left_warp_bil.png" height="210px" alt="box">
         </div>
         <div class="image-item">
             <p class="image-label">Right, Original:</p>
             <img src="img/akira_right.png" height="210px" alt="box">
         </div>
         <div class="image-item">
+            <p class="image-label">Left, Warped + Padded:</p>
+            <img src="img/mosaic/akira_left_padded.png" height="80px" alt="box">
+        </div>
+        <div class="image-item">
             <p class="image-label">Right, Warped + Padded:</p>
             <img src="img/mosaic/akira_right_padded.png" height="210px" alt="box">
         </div>
     </div>
-    <p>Step 2: apply masks to the images (binary alpha mask, or linear alpha mask)</p>
-    <p>Binary alpha mask: for overlap region, values are 0.5 from left image and 0.5 from right image</p>
-    <p>Linear alpha mask: for overlap region, an image will have more weight on columns it is closer to</p>
-    <div class="image-grid" style="align-items:center; justify-content:center;">
+    <br>
+    <h3 id="part1.2">Step 2: Masking our Images</h2>
+        <p>If we directly add our two images together, we'll see that the pixels in the overlap region 
+            will stand out significantly, since they are roughly doubled in value. 
+        </p>
+        <div class="img-container" style="align-items:center; justify-content:center;">
+            <p class="image-label">Naive Adding:</p>
+            <img src="img/mosaic/akira_naive_sum.png" height="220px" alt="box">
+        </div>
+        <p>To adjust these overlapped values, we can apply masks to the images in the overlapping region. 
+            
+            For the overlapping region, we considered a binary alpha mask and a linear alpha mask.
+        </p>
+        <p><strong>Binary alpha mask: </strong>for every pixel in the overlap region, we use 0.5 of the value in 
+        one image, then 0.5 of the value in the other image.</p>
+        <p><strong>Linear alpha mask (columnwise): </strong>for every pixel in the overlapping region, we'll use a greater proportion of the 
+            value in the closer image, and a lesser proportion of the value in the further image. For our images, "distance" was 
+            determined using the x coordinate (columns).
+        </p>
+        <p><strong>Linear alpha mask (Euclidean distance): </strong>for every pixel in the overlapping region, we'll use a greater proportion of the 
+            value in the closer image, and a lesser proportion of the value in the further image. For our images, "distance" was calcuated 
+            as Euclidean distance. To do so:
+            <ul>
+                <li>
+                    First, we create a mask for our individual image, where the value of the mask pixel ([0, 1]) depends on its distance 
+                    from the four edges of the image. This mask determines the alpha channel for our image, so pixels closer to 
+                    the edges of the image will have a lower alpha.
+                    <div class="img-container" style="align-items:center; justify-content:center;">
+                        <img src="img/blend/akira_weight_mask.png" height="120px" alt="cam_conv_dx">
+                    </div>
+                </li>
+                <br>
+                <li>Then, we warp our alpha-adjusted image to the proper shape (depending on our homograpy H; see example below). Now, 
+                    using the alpha values of our properly padded images, we compute a mask for the padded version of our image, using 
+                    the formula <code>alpha = dtrans1 / (dtrans1+dtrans2)</code>, where <code>dtrans</code> are the alpha values of 
+                    our individual image. Below is the example of our final mask with the boba images.
+
+                    <div class="img-container" style="align-items:center; justify-content:center;">
+                        <img src="img/blend/akira_weighted_mask.png" height="120px" alt="cam_conv_dx">
+                    </div>
+                </li>
+                <li>Finally, We apply the final mask to our padded images, then ceil all the alpha values to 1, so our final image is solid.</li>
+            </ul>
+        </p>
+        <div class="callout">
+            <strong>Note:</strong> When implementing the linear alpha mask, I initially did it columnwise by accident, which is 
+            why I've added it to the list of mask options above. This mask actually looked decently well when applied to 
+            the Hearst Mining image, but that is because colors along the top and bottom edges of the overlap region 
+            matched pretty well. In other images, like the boba image, we can still clearly see the bottom edge of 
+            the overlap region, because the fridge color changes, and thus Euclidean distance is a bit more of an improvement.
+        </div>
+    <div class="image-grid-2" style="align-items:center; justify-content:center;">
         <div class="image-item">
             <p class="image-label">Left:</p>
             <img src="img/akira_left.png" height="210px" alt="box">
-        </div>
-        <div class="image-item">
-            <p class="image-label">Left w/ Binary Alpha:</p>
-            <img src="img/blend/akira_bin_left.png" height="210px" alt="box">
-        </div>
-        <div class="image-item">
-            <p class="image-label">Left w/ Linear Alpha:</p>
-            <img src="img/blend/akira_lin_left.png" height="80px" alt="box">
         </div>
         <div class="image-item">
             <p class="image-label">Right:</p>
             <img src="img/akira_right.png" height="210px" alt="box">
         </div>
         <div class="image-item">
+            <p class="image-label">Left w/ Binary Alpha:</p>
+            <img src="img/blend/akira_bin_left.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
             <p class="image-label">Right w/ Binary Alpha:</p>
             <img src="img/blend/akira_bin_right.png" height="210px" alt="box">
         </div>
         <div class="image-item">
-            <p class="image-label">Right w/ Linear Alpha</p>
+            <p class="image-label">Left w/ Linear Alpha (col):</p>
+            <img src="img/blend/akira_lin_left.png" height="80px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Right w/ Linear Alpha (col):</p>
             <img src="img/blend/akira_lin_right.png" height="210px" alt="box">
         </div>
-    </div>
-    
-    <p>Step 3: add the results together!</p>
-    <div class="image-grid" style="align-items:center; justify-content:center;">
         <div class="image-item">
-            <p class="image-label">Naive Adding :( (but cool colors)</p>
-            <img src="img/mosaic/akira_naive_sum.png" height="210px" alt="box">
+            <p class="image-label">Left w/ Linear Alpha (Euc):</p>
+            <img src="img/blend/akira_weighted_left.png" height="80px" alt="box">
         </div>
+        <div class="image-item">
+            <p class="image-label">Right w/ Linear Alpha (Euc):</p>
+            <img src="img/blend/akira_weighted_right.png" height="210px" alt="box">
+        </div>
+    </div>
+    <p>In the binary alpha results, we see that the alpha mask is uniform throughout the overlap region. 
+        In the linear alpha results, we can see that there is a horizontal gradient along 
+        the overlap region, with an image's values being "used less" as we near the further part of 
+        the overlap region.
+    </p>
+    <div class="callout">
+        <strong>Note:</strong> Within the overlap region, you might notice that there are some black spots, instead 
+        of a uniform/linear fade. This is because when obtaining our mask for the overlapped region, we selected 
+        non-black pixels that appeared in both images. For these black spots, the pixels themselves were fully black 
+        (0, 0, 0), so they were not included in the overlapped region.
+    </div>
+    <h3 id="part1.2">Step 3: Add the Results Together!</h2>
+    <p>Going back to the boba example, we've displayed the results of applying both 
+        the binary and linear alpha masks on our images:
+    </p>
+    <div class="image-grid" style="align-items:center; justify-content:center;">
         <div class="image-item">
             <p class="image-label">Binary Alpha Mask:</p>
             <img src="img/mosaic/akira_bin_merge.png" height="80px" alt="box">
         </div>
         <div class="image-item">
-            <p class="image-label">Linear Alpha Mask:</p>
+            <p class="image-label">Linear Alpha Mask (col):</p>
             <img src="img/mosaic/akira_lin_merge.png" height="210px" alt="box">
         </div>
+        <div class="image-item">
+            <p class="image-label">Linear Alpha Mask (Euc):</p>
+            <img src="img/mosaic/akira_weighted_blend.png" height="210px" alt="box">
+        </div>
     </div>
-    <div class="image-grid-4" style="align-items:center; justify-content:center;">
+    <p>You can see that in the binary alpha mask, we can pretty clearly tell 
+        where our images were combined, i.e. where the overlap region is. In the linear alpha mask, 
+        the overlap region is much more smoothed, since we weighted the pixel values. 
+    </p>
+    <div class="callout">
+        <strong>Note:</strong> As mentioned earlier, in the linear alpha mask (col), the edges are still a bit noticeable
+         (particularly on the fridge). Since the linear alpha mask only cared about columns, not rows, 
+         so the bottom and top edges won't blend with the outside as nicely.
+    </div>
+    <p>Below are some more examples of mosaicing!</p>
+    <p><strong>Hearst Mining Memorial Building:</strong></p>
+    <div class="image-grid" style="align-items:center; justify-content:center;">
         <div class="image-item">
             <p class="image-label">Left Image</p>
             <img src="img/mosaic/hearst_left.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
         </div>
         <div class="image-item">
             <p class="image-label">Right Image</p>
@@ -430,27 +521,260 @@
             <img src="img/mosaic/hearst_bin_merge.png" height="210px" alt="box">
         </div>
         <div class="image-item">
-            <p class="image-label">Linear Alpha Merge</p>
+            <p class="image-label">Linear Alpha Merge (col)</p>
             <img src="img/mosaic/hearst_lin_merge.png" height="210px" alt="box">
         </div>
-
+        <div class="image-item">
+            <p class="image-label">Linear Alpha Merge (Euc)</p>
+            <img src="img/mosaic/hearst_weighted_blend.png" height="80px" alt="box">
+        </div>
+    </div>
+    <br>
+        <p><strong>Amtrak Stop:</strong></p>
+    <div class="image-grid" style="align-items:center; justify-content:center;">
         <div class="image-item">
             <p class="image-label">Left Image</p>
-            <img src="img/rr_left.png" height="210px" alt="box">
+            <img src="img/amtrak_left.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
         </div>
         <div class="image-item">
             <p class="image-label">Right Image</p>
-            <img src="img/rr_right.png" height="80px" alt="box">
+            <img src="img/amtrak_right.png" height="80px" alt="box">
         </div>
         <div class="image-item">
             <p class="image-label">Binary Alpha Merge</p>
-            <img src="img/mosaic/rr_bin_merge.png" height="210px" alt="box">
+            <img src="img/mosaic/amtrak_bin_merge.png" height="210px" alt="box">
         </div>
         <div class="image-item">
-            <p class="image-label">Linear Alpha Merge</p>
-            <img src="img/mosaic/rr_lin_merge.png" height="210px" alt="box">
+            <p class="image-label">Linear Alpha Merge (col)</p>
+            <img src="img/mosaic/amtrak_lin_merge.png" height="210px" alt="box">
+        </div>
+        <div class="image-item">
+            <p class="image-label">Linear Alpha Merge (Euc)</p>
+            <img src="img/mosaic/amtrak_weighted_blend.png" height="80px" alt="box">
         </div>
     </div>
+
+    <h2 id="part2">Part 2: Feature Matching for Autostitching</h2>
+    <p>Earlier, we computed our homography by manually selecting the correspondences. In this part, we'll 
+        see how we can do it automatically!
+    </p>
+
+    <h2 id="part2.1">Harris Corner Detection & ANMS</h2>
+    <div>
+        <p>
+            Using Harris corner detection, we can automatically find "corners"/points using their gradients in the 
+            x and y directions. However, Harris corner detection itself gives us many, many points:
+        </p>
+        <div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="img/b1/akira_left_pts_harris.png" height="300px" alt="cam_conv_dx">
+        </div>
+
+        <p>We want to reduce the number of points, only keeping the most "obvious" corners. However, we also 
+            want the points to be relatively spread out (so they aren't all in one place). To 
+            do this, we implemented Adaptive Non-Maximal Suppression as described in 
+            <a href="https://cal-cs180.github.io/fa25/hw/proj3/Papers/MOPS.pdf">this paper</a>. Now, our selected 
+            points (200 in this example) are nicely spread out!
+        </p>
+
+        <div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="img/b1/akira_left_pts_ANMS.png" height="300px" alt="cam_conv_dx">
+        </div>
+        <div class="callout">
+            Seems like some parts of this fridge needs cleaning...
+        </div>
+    </div>
+
+    <h2 id="part2.2">Feature Descriptor Extraction</h2>
+    <div>
+        <p>Now that we have our corners, we want to obtain our correspondences, i.e. pairs of 
+            points across the two images. To find our correspondences, we need to first "describe" each of our points 
+            using a feature descriptor, then match points that have similar enough descriptions.
+        </p>
+        <p>For each point, we calculated the feature descriptor by:
+            <ul>
+                <li>1) Obtaining a 40x40 pixel patch around the point</li>
+                <br>
+                <li>2) Downsampling the 40x40 patch to our extract 8x8 feature descriptor</li>
+                <br>
+                <li>3) Normalizing the extracted feature descriptor such that the mean is 0 
+                    and the standard deviation is 1 (to account for different brightnesses).</li>
+            </ul>
+        </p>
+        <p>Below are some examples of the 40x40 pixel patches from select points (in the boba image), 
+            along with their 8x8 feature descriptor.
+        </p>
+
+        <div class="image-grid-4" style="align-items:center; justify-content:center;">
+            <div class="image-item">
+                <p class="image-label">Patch 1:</p>
+                <img src="img/feat/orig_0.png" height="210px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">Patch 2:</p>
+                <img src="img/feat/orig_1.png" height="210px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">Patch 3:</p>
+                <img src="img/feat/orig_4.png" height="210px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">Patch 4:</p>
+                <img src="img/feat/orig_42.png" height="210px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">Feature Descriptor 1:</p>
+                <img src="img/feat/select_0.png" height="80px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">Feature Descriptor 2:</p>
+                <img src="img/feat/select_1.png" height="80px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">amongus 3:</p>
+                <img src="img/feat/select_4.png" height="80px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">Feature Descriptor 4:</p>
+                <img src="img/feat/select_42.png" height="80px" alt="box">
+            </div>
+
+            <div class="image-item">
+                <p class="image-label">Patch 5:</p>
+                <img src="img/feat/orig_46.png" height="210px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">Patch 6:</p>
+                <img src="img/feat/orig_50.png" height="210px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">Patch 7:</p>
+                <img src="img/feat/orig_64.png" height="210px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">Patch 8:</p>
+                <img src="img/feat/orig_70.png" height="210px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">Feature Descriptor 5:</p>
+                <img src="img/feat/select_46.png" height="80px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">Feature Descriptor 6:</p>
+                <img src="img/feat/select_50.png" height="80px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">Feature Descriptor 7:</p>
+                <img src="img/feat/select_64.png" height="80px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">Feature Descriptor 8:</p>
+                <img src="img/feat/select_70.png" height="80px" alt="box">
+            </div>
+        </div>
+    </div>
+
+    <h2 id="part2.3">Feature Matching</h2>
+    <div>
+        <p>
+            We've obtained our points from ANMS, and we've obtained our feature descriptors for 
+        each of those points. The next step is to match points with similar enough feature descriptors.
+        </p>
+        <p>For feature matching, we used Lowe's technique, as described in the same
+            <a href="https://cal-cs180.github.io/fa25/hw/proj3/Papers/MOPS.pdf">paper</a> mentioned above. We 
+            implemented feature matching as follows. For each point in image 1:
+
+            <ul>
+                <li>
+                    Find the two points in image 2 with feature descriptors closest to itself (determined by Euclidean distance), 
+                    aka the two nearest neighbors. 
+                </li>
+                <br>
+                <li>Take the ratio of the distances: $$\frac{NN1_{dist}}{NN2_{dist}}$$</li>
+                <br>
+                <li>If the ratio is below a certain threshold, we include our point (from image 1) and its $NN1$ (from image 2) as a 
+                    found pair.
+                </li>
+            </ul>
+        </p>
+
+        <p>In our boba example, we found the following correspondences:</p>
+        <div class="image-grid-2" style="align-items:center; justify-content:center;">
+            <div class="image-item">
+                <p class="image-label">Left Points:</p>
+                <img src="img/b3/akira_left_matched.png" height="210px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">Right Points:</p>
+                <img src="img/b3/akira_right_matched.png" height="210px" alt="box">
+            </div>
+        </div>
+       
+        <p>We see that a lot of these points match up, which is good! However, some of these correspondences 
+            are still not correct (in particular, 2 and 6), and we don't want these to influence our calculation 
+            of the homography matrix. We'll add a last step of using RANSAC to filter out poor pairings to get 
+            our final correspondences!
+        </p>
+    </div>
+
+    <h2 id="part2.4">RANSAC</h2>
+    <div>
+        <p>RANSAC, RANdom SAmple Consensus, is an algorithm we use to remove outliers from our pairings after 
+            feature matching, giving us (with high probability) the set of points from which we can accurately compute 
+            our homography. Given our initial set of pairings and a number of iterations, we perform RANSAC <code>numIter</code> 
+            times, each time doing the following:
+        </p>
+        <ul>
+            <li>1) Randomly sample 4 points (without replacement), and construct a homography matrix from those points.</li>
+            <br>
+            <li>2) For that homography matrix, count the number of inliers ($(H * im2\_pts) - im1\_pts \leq threshold$).</li>
+            <br>
+            <li>3) After all iterations are done, return the homography matrix with the highest 
+                number of inliers (and optionally the inliers for that matrix).</li>
+        </ul>
+    </div>
+
+    <p>
+        Now, let's go back to our manual examples from the <a href="#part1.4">mosaicing</a> section, and 
+        recreate the mosaics, except this time we'll do them by automatically extracting the correspondences 
+        (ANMS, feature matching, and finally RANSAC)! The comparisons are below:
+    </p>
+        <div class="image-grid-2" style="align-items:center; justify-content:center;">
+            <div class="image-item">
+                <p class="image-label">Boba (manual)</p>
+                <img src="img/mosaic/akira_weighted_blend.png" height="210px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">Boba (auto)</p>
+                <img src="img/b4/akira_automosaic.png" height="210px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">Hearst Mining (manual):</p>
+                <img src="img/mosaic/hearst_weighted_blend.png" height="210px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">Hearst Mining (auto):</p>
+                <img src="img/b4/hearst_automosaic.png" height="80px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">Amtrak Stop (manual):</p>
+                <img src="img/mosaic/amtrak_weighted_blend.png" height="210px" alt="box">
+            </div>
+            <div class="image-item">
+                <p class="image-label">Amtrak Stop (auto):</p>
+                <img src="img/b4/amtrak_automosaic.png" height="210px" alt="box">
+            </div>
+        </div>
+        <p>Seems like our autostitching does a pretty good job! We can see that in the boba picture, 
+            the autostitching resulted in a more different homography than the manual version, and we can 
+            see some differences in the clarity of the two homographies. For example, the top plastic cover of the left boba is slightly blurry in the manual mosaic, 
+            but it is quite clear in the autostitched mosaic. On the other hand, the bottom of that same boba is 
+            slightly clearer in the manual mosaic. Maybe my hands were shaking a bit between takes...
+        </p>
+        <div class="callout">
+            Side note: I was almost spot on when picking the points for the Amtrak station picture 😁
+        </div>
   </div>
   
 <script src="script.js"></script>

@@ -121,7 +121,7 @@ body.dark-mode .sidebar a.active-toc {
 .image-grid-2 {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  column-gap: 140px;
+  column-gap: 70px;
   row-gap: 20px;
   position: relative;
   overflow: visible;
@@ -151,6 +151,7 @@ body.dark-mode .sidebar a.active-toc {
   position: relative;
   overflow: visible;
   z-index: 1;
+  image-rendering: pixelated;
 }
 
 .image-item:hover {
