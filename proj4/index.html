@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Proj 4</title>
+  <link rel="stylesheet" href="proj4.css">
+
+	<script type="text/x-mathjax-config">
+		MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+	</script>
+	<script type="text/javascript"
+		src="http://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+	</script>
+  <!-- Link to Prism CSS -->
+	<link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+
+	<!-- Link to Prism JS -->
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+
+</head>
+<body>
+  <nav class="sidebar">
+    <br>
+    <h2><a href="../index.html">Home</a></h2>
+    <br>
+    <button id="dark-mode-toggle">Dark Mode</button>
+    <h2>Table of Contents</h2>
+    <ul>
+			<!-- <li><a href="#part1">Overview</a></li> -->
+      <li><a href="#part0">Part 0: Calibrating Camera & Capturing a 3D Scan</a></li>
+      </li>
+      <li><a href="#part1">Part 1: Fit a Neural Field to a 2D Image</a>
+      </li>
+      <li><a href="#part2">Part 2: Fit a Neural Radiance Field from Multi-view Images</a>
+        <ul>
+            <li><a href="#part2.1">Image Sharpening</a></li>
+            <li><a href="#part2.2">Hybrid Images</a></li>
+            <li><a href="#part2.3">Gaussian and Laplacian</a></li>
+            <li><a href="#part2.4">Multiresolution Blending</a></li>
+        </ul>
+      </li>
+      
+    </ul>  
+  </nav>
+
+  <div class="main">
+    <h1>Project 2: Fun with Filters and Frequencies</h1>
+
+		<div>
+			<!-- <h2 id="part0">Overview</h2>
+    	<div class="img-container">
+				<p class="text-desc">todo</p>
+			</div> -->
+			<p style="font-size: 13px; font-style: italic;">
+					*Although this is written in first-person plural (just preference), the project was completed by myself individually.
+			</p>
+		</div>
+
+    <h2 id="part1">Part 0: Calibrating Camera & Capturing a 3D Scan</h2>
+    <div>
+        See the start of Part 2 for viser visualizations.
+    </div>
+
+
+		<h2 id="part1">Part 1: Fit a Neural Field to a 2D Image</h2>
+		<div>
+			<p> 
+				For a particular 2D image, we can train a model that, given a pixel coordinate, 
+        outputs the corresponding rgb values.
+			</p>
+			<p> 
+				The model architecture consists of the following: 
+      </p>
+			<ul>
+				<li>
+						A Sinusoidal Positional Encoding operation: expands the dimensionality of the coordinate 
+            from 1x2 to (2L+1)x2, where L represents the frequency level. 
+            <div class="img-container" style="align-items:center; justify-content:center;">
+                <img src="1img/pe.png" height="20px" alt="cam_conv_dx">
+            </div>
+        </li>
+				<br>
+				<li>Three repeats of a Linear and ReLU layer. Each layer has width 256.</li>
+        <li>One more Linear layer to shrink the width to three neurons, representing red, green, and blue.</li>
+        <li>A Sigmoid layer to ensure the output is between 0 and 1 (normalized pixel color range).</li>
+			</ul>
+			<div>
+        Visual diagram of MLP architecture: 
+				<div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="1img/mlp.png" height="140px" alt="cam_conv_dx">
+        </div>
+			</div>
+      <div>
+        Below are the results of training our model for two images for 700 and 1000 epochs, respectively.
+        <div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="1img/fox_prog.png" height="240px" alt="cam_conv_dx">
+        </div>
+        <div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="1img/sun_prog.png" height="240px" alt="cam_conv_dx">
+        </div>
+        <p>With some parameter fine-tuning, we determined that the model's learning rate should be 
+          0.007, and that the number of levels for positional encoding should be 10. 
+          
+          
+          TODO: FIX THIS
+          We found that 
+          the learning rate must be kept small, otherwise the model diverges and gives extremely poor 
+          results (which is why we get almost completely yellow images). Positional encoding also cannot 
+          have too many levels, since it makes the model more complicated than need be.
+          <div class="img-container" style="align-items:center; justify-content:center;">
+              <img src="1img/grid.png" height="400px" alt="cam_conv_dx">
+          </div>
+        </p>
+        <p>Besides using MSE as our loss metric, we evaluated our model using PSNR, calculated as 
+          10 * log_10(1 / MSE). 
+          We can see that as our iterations increase, our PSNR generally increases (since loss 
+          decreases), indicating that our model is consistently improving.
+        </p>
+        <div class="img-container" style="align-items:center; justify-content:center;">
+              <img src="1img/sunset_psnr.png" height="240px" alt="cam_conv_dx">
+          </div>
+          <p>
+          </p>
+      </div>
+		</div>
+		
+    <h2 id="part2">Part 2: Fit a Neural Radiance Field from Multi-view Images</h2>
+    <div> 
+        <p>What we did in Part 1 isn't super useful - we basically just trained a model to copy the 
+          input image exactly, since it's in 2D. However, we can expand on this idea to perform 3D 
+          reconstruction, using a bunch of images to produce a 3D rendering of an object.
+        </p>
+    </div>
+
+    <h3 id="part2.1">Step 1: Getting Rays from Pixels</h3>
+    <div>
+        <p>Given a specific camera position and a pixel value (x, y) within the corresponding image, we 
+          want to be able to shoot a ray out of the image and through that pixel, and sample along this ray 
+          during training (and testing). To get this ray, we need to find its origin and direction in the 
+          world coordinate system.
+          TODO: EXPAND more about transformation matrices stuff</p>
+        <p>
+      Below are the visualizations of the cloud of cameras from photos I took:
+        <div class="img-container" style="align-items:center; justify-content:center;">
+                <img src="0img/frustum1.png" height="200px" alt="cam_conv_dx">
+            </div>
+        <div class="img-container" style="align-items:center; justify-content:center;">
+              <img src="0img/frustum2.png" height="200px" alt="cam_conv_dx">
+          </div>
+        <p>And a slightly more zoomed in version so we can verify that 
+          the cameras are actually displayed in the right place, based on the 
+          images shown.
+        </p>
+        <div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="0img/frustum_zoom.png" height="200px" alt="cam_conv_dx">
+        </div>
+      </p>
+    </div>
+    <h3 id="part2.2">Step 2: NeRF MLP Architecture</h3>
+      <div>
+        Some more explanation here
+          <div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="2img/nerf_arch.png" height="190px" alt="cam_conv_dx">
+          </div>
+      </div>
+    
+    <h3 id="part2.3">Step 3: Sampling & Volumetric Rendering</h3>
+      <div>
+        Some more explanation here
+          <div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="2lego/side.png" height="230px" alt="cam_conv_dx">
+            <img src="2lego/side2.png" height="230px" alt="cam_conv_dx">
+          </div>
+          <div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="2lego/front.png" height="240px" alt="cam_conv_dx">
+          </div>
+          <div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="2lego/circle.png" height="230px" alt="cam_conv_dx">
+            <img src="2lego/dome.png" height="230px" alt="cam_conv_dx">
+          </div>
+      </div>
+    <h3 id="part2.4">Results with Lego Dataset</h3>
+      <div>
+        TODO: commentary bruh
+        <div class="img-container" style="align-items:center; justify-content:center;">
+          <img src="2lego/prog.png" height="250px" alt="cam_conv_dx">
+        </div>
+        <div class="img-container" style="align-items:center; justify-content:center;">
+          <img src="2lego/valid_psnr.png" height="250px" alt="cam_conv_dx">
+        </div>
+        <div class="img-container" style="align-items:center; justify-content:center;">
+          <img src="2lego/lego.gif" height="250px" alt="cam_conv_dx">
+        </div>
+
+      </div>
+    
+    <h3 id="part2.5">Results with Lafufu Dataset</h3>
+      <div>
+          <div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="2img/lafufu.gif" height="230px" alt="cam_conv_dx">
+          </div>
+        <p>TODO: some commentary</p>
+      </div>
+
+    <h3 id="part2.6">Results with Bunny Dataset</h3>
+      <div>
+        <p>And finally, here's the results for my own images I took of my younger sister's 
+          bunny clip! 
+          <div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="2img/bunny.gif" height="230px" alt="cam_conv_dx">
+          </div>
+        </p>
+        TODO: more commentary
+        <p>
+          <div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="2img/bun_stats.png" height="250px" alt="cam_conv_dx">
+          </div>
+          <div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="2img/bun_val1.png" height="250px" alt="cam_conv_dx">
+          </div>
+          <div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="2img/bun_val2.png" height="250px" alt="cam_conv_dx">
+          </div>
+          <div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="2img/bun_val3.png" height="250px" alt="cam_conv_dx">
+          </div>
+        </p>
+
+      </div>
+
+               
+
+</div>
+  
+<script src="script.js"></script>
+
+</body>
+</html>
