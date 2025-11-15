@@ -34,10 +34,13 @@
       </li>
       <li><a href="#part2">Part 2: Fit a Neural Radiance Field from Multi-view Images</a>
         <ul>
-            <li><a href="#part2.1">Image Sharpening</a></li>
-            <li><a href="#part2.2">Hybrid Images</a></li>
-            <li><a href="#part2.3">Gaussian and Laplacian</a></li>
-            <li><a href="#part2.4">Multiresolution Blending</a></li>
+            <li><a href="#part2.1">Step 1: Getting Rays from Pixels</a></li>
+            <li><a href="#part2.2">Step 2: NeRF MLP Architecture</a></li>
+            <li><a href="#part2.3">Step 3: Sampling & Volumetric Rendering</a></li>
+            <li><a href="#part2.4">Step 4: Training our Model</a></li>
+            <li><a href="#part2.5">Results with Lego Dataset</a></li>
+            <li><a href="#part2.6">Results with Lafufu Dataset</a></li>
+            <li><a href="#part2.7">Results with Bunny Dataset</a></li>
         </ul>
       </li>
       
@@ -45,7 +48,7 @@
   </nav>
 
   <div class="main">
-    <h1>Project 2: Fun with Filters and Frequencies</h1>
+    <h1>Project 4: Neural Radiance Field</h1>
 
 		<div>
 			<!-- <h2 id="part0">Overview</h2>
@@ -57,9 +60,9 @@
 			</p>
 		</div>
 
-    <h2 id="part1">Part 0: Calibrating Camera & Capturing a 3D Scan</h2>
+    <h2 id="part0">Part 0: Calibrating Camera & Capturing a 3D Scan</h2>
     <div>
-        See the start of Part 2 for viser visualizations.
+        See the start of Part 2 for viser visualizations and descriptions.
     </div>
 
 
@@ -127,7 +130,7 @@
 		</div>
 		
     <h2 id="part2">Part 2: Fit a Neural Radiance Field from Multi-view Images</h2>
-    <div> 
+    <div>
         <p>What we did in Part 1 isn't super useful - we basically just trained a model to copy the 
           input image exactly, since it's in 2D. However, we can expand on this idea to perform 3D 
           reconstruction, using a bunch of images to produce a 3D rendering of an object!
@@ -140,9 +143,14 @@
           want to be able to shoot a ray out of the image and through that pixel, and sample along this ray 
           during training (and testing). To get this ray, we need to find its origin and direction in the 
           world coordinate system.
-          TODO: EXPAND more about transformation matrices stuff</p>
+        </p>
+        <p>Before we do this, we must have a way to go from pixel coordinates to world coordinates, which requires knowing the intrinsic matrix of the camera, as well as the extrinsics from all the camera poses. 
+        </p>
+        <p>Getting the intrinsic matrix of the camera requires calibrating the camera: cameras have different intrinsics, so we need to calibrate our camera by taking many pictures of ArUco tags. We can determine the world coordinates of the ArUco tag corners, then use `cv2.aruco.detectMarkers` to detect the ArUco tags in the image, and then calibrate the camera using `cv2.calibrateCamera`.</p>
+        <p>To get the extrinsic matrix of each camera pose, we can use `cv2.solvePnP` to get the rotation and translation vectors, then process those vectors to retrieve our camera-to-world matrix. `cv2.solvePnP` requires knowing the intrinsics matrix and distortion coefficients (from `cv2.calibrateCamera`, and object points (the world coordinates of the ArUco tags) and image points (detected location of the ArUco tags).</p>
         <p>
-      Below are the visualizations of the cloud of cameras from photos I took:
+      Below are the visualizations of the cloud of cameras from photos I took, where we can see how the 
+      camera-to-world matrices map the cameras to their world location:
         <div class="img-container" style="align-items:center; justify-content:center;">
                 <img src="0img/frustum1.png" height="200px" alt="cam_conv_dx">
             </div>
@@ -151,16 +159,43 @@
           </div>
         <p>And a slightly more zoomed in version so we can verify that 
           the cameras are actually displayed in the right place, based on the 
-          images shown.
+          images shown:
         </p>
         <div class="img-container" style="align-items:center; justify-content:center;">
             <img src="0img/frustum_zoom.png" height="200px" alt="cam_conv_dx">
         </div>
       </p>
+      <p>Once we have our intrinsic and extrinsic matrices, we can compute the origin vector and 
+        direction of a ray going through a particular camera pose and a pixel. This will be useful for 
+        sampling later in Step 3.
+      </p>
     </div>
     <h3 id="part2.2">Step 2: NeRF MLP Architecture</h3>
       <div>
-        Some more explanation here
+        Similar to Part 1, we will use an MLP, except this MLP will take in world coordinates and ray direction 
+       as its inputs, 
+        then output the corresponding density and RGB value at that world coordinate.
+        <p> 
+				The model architecture consists of the following: 
+        </p>
+        <ul>
+          <li>
+              Positional Encoding for both inputs.
+          </li>
+          <br>
+          <li>Four repeats of a Linear and ReLU layer for the world coordinate input. Each layer has width 256.</li>
+          <br>
+          <li>Concatenate the world coordinate input with the previous output, then a Linear layer to 
+            shrink the width back to 256.</li>
+          <br>
+            <li>Three repeats of a ReLU and Linear layer with width 256.</li>
+          <br>
+            <li>To finalize the density, we apply a final Linear layer to shrink the output to width 1.</li>
+          <br>
+            <li>For the rgb, we apply a Linear layer (256), concatenate the PE'ed ray direction, then 
+            a Linear + ReLU + Linear + Sigmoid to shrink the output to 3 and keep it within 0 and 1.
+          </li>
+        </ul>
           <div class="img-container" style="align-items:center; justify-content:center;">
             <img src="2img/nerf_arch.png" height="190px" alt="cam_conv_dx">
           </div>
@@ -168,8 +203,12 @@
     
     <h3 id="part2.3">Step 3: Sampling & Volumetric Rendering</h3>
       <div>
-        Some more explanation here
-          <div class="img-container" style="align-items:center; justify-content:center;">
+        <p>Our NeRF model expects xyz + ray direction inputs, and outputs the density and rgb value at the world coordinate from the ray direction view. To evaluate our NeRF model, we are going to sample through a ray from a particular image, get the density and rgb values using our model, aggregate the results using volume rendering, then compare it with the color of the actual pixel.</p>
+        <p>Sampling across a ray: Given the origin vector and ray direction of a particular ray, as well as near and far values and number of samples, we compute the world coordinates of many points along the ray, which we feed into our NeRF model. During training, we include perturbations (we don’t sample at uniform distances) to try to learn as much information from our training images as possible.</p>
+        <p>Below are visual examples of what sampling across a ray looks like. We can see that the points start and end at fixed 
+          distances from the camera, and that there are perturbations between the samples.
+        </p>
+        <div class="img-container" style="align-items:center; justify-content:center;">
             <img src="2lego/side.png" height="230px" alt="cam_conv_dx">
             <img src="2lego/side2.png" height="230px" alt="cam_conv_dx">
           </div>
@@ -180,8 +219,21 @@
             <img src="2lego/circle.png" height="230px" alt="cam_conv_dx">
             <img src="2lego/dome.png" height="230px" alt="cam_conv_dx">
           </div>
+          <p>The volume rendering equation is as follows:</p>
+          <div class="img-container" style="align-items:center; justify-content:center;">
+            <img src="2img/volrend.png" height="70px" alt="cam_conv_dx">
+          </div>
       </div>
-    <h3 id="part2.4">Results with Lego Dataset</h3>
+    <h3 id="part2.4">Step 4: Training our Model</h3>
+    <div>
+      The last step is to use all of the above to train our model! Given a batch size of N, we implemented a 
+      function that will randomly sample N // M pixels from each of the M images, then use that to compute and return the ray origin, 
+      ray direction, and pixel colors for every sampled pixel as described in step 3. We then 
+      repeat this process for a specified number of epochs, evaluating the model using MSE loss and 
+      performing backprop to update our parameters.
+    </div>
+
+    <h3 id="part2.5">Results with Lego Dataset</h3>
       <div>
         <p>We first trained our model with the Lego dataset, using a set of 10 images as our validation group. 
           The near and far were 2.0 and 6.0, respectively, and we used a batch size of 10k rays.
@@ -210,7 +262,7 @@
 
       </div>
     
-    <h3 id="part2.5">Results with Lafufu Dataset</h3>
+    <h3 id="part2.6">Results with Lafufu Dataset</h3>
       <div>
         <p>We tested our implementation with the provided Lafufu dataset, which included calibration images 
           and the Lafufu images. Unlike the Lego dataset, we had to calculate the extrinsics and intrinsic matrices ourselves 
@@ -228,7 +280,7 @@
         </div>
       </div>
 
-    <h3 id="part2.6">Results with Bunny Dataset</h3>
+    <h3 id="part2.7">Results with Bunny Dataset</h3>
       <div>
         <p>And finally, here's the results for my own images I took of my younger sister's 
           bunny clip! Like the Lafufu dataset, I had to resize these images down for computation sake. I 
