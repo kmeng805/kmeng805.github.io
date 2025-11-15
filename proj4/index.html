@@ -227,7 +227,7 @@
     <h3 id="part2.4">Step 4: Training our Model</h3>
     <div>
       The last step is to use all of the above to train our model! Given a batch size of N, we implemented a 
-      function that will randomly sample N // M pixels from each of the M images, then use that to compute and return the ray origin, 
+      function that will randomly sample N // M pixels from each of the M images (efficiently using NumPy operations), then use that to compute and return the ray origin, 
       ray direction, and pixel colors for every sampled pixel as described in step 3. We then 
       repeat this process for a specified number of epochs, evaluating the model using MSE loss and 
       performing backprop to update our parameters.
