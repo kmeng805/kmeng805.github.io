@@ -101,13 +101,14 @@
         </div>
         <p>With some parameter fine-tuning, we determined that the model's learning rate should be 
           0.007, and that the number of levels for positional encoding should be 10. 
-          
-          
-          TODO: FIX THIS
-          We found that 
-          the learning rate must be kept small, otherwise the model diverges and gives extremely poor 
-          results (which is why we get almost completely yellow images). Positional encoding also cannot 
-          have too many levels, since it makes the model more complicated than need be.
+        </p>
+        <p>
+          We also experimented with decreasing the levels for positional encoding and the width of the 
+          network. We found that with very low PE levels, the image has less high frequencies (e.g. the 
+          top images look blurrier than the bottom, as if they had been low-passed). Additionally, with 
+          a lower network width, our model also showed less details, indicating that 
+          it's harder for the model to learn the image (e.g. you can see more ocean waves 
+          in the bottom left picture compared to the bottom right picture).
           <div class="img-container" style="align-items:center; justify-content:center;">
               <img src="1img/grid.png" height="400px" alt="cam_conv_dx">
           </div>
@@ -129,7 +130,7 @@
     <div> 
         <p>What we did in Part 1 isn't super useful - we basically just trained a model to copy the 
           input image exactly, since it's in 2D. However, we can expand on this idea to perform 3D 
-          reconstruction, using a bunch of images to produce a 3D rendering of an object.
+          reconstruction, using a bunch of images to produce a 3D rendering of an object!
         </p>
     </div>
 
@@ -182,13 +183,27 @@
       </div>
     <h3 id="part2.4">Results with Lego Dataset</h3>
       <div>
-        TODO: commentary bruh
+        <p>We first trained our model with the Lego dataset, using a set of 10 images as our validation group. 
+          The near and far were 2.0 and 6.0, respectively, and we used a batch size of 10k rays.
+        </p>
+        <p>
+          Since the images were already pre-processed, we were given the camera extrinsic matrices and 
+          camera focal length (to compute the intrinsic matrix). As a sanity check, we visualized the camera poses in viser, 
+          and we can see that the cameras indeed form a dome-like shape (see Step 3's images).
+        </p>
+        <p>Looking at intermediate renders of a chosen validation image, we can see that the quality 
+          continues to increase - a good sign!
+        </p>
         <div class="img-container" style="align-items:center; justify-content:center;">
-          <img src="2lego/prog.png" height="250px" alt="cam_conv_dx">
+          <img src="2lego/prog.png" height="350px" alt="cam_conv_dx">
         </div>
+        <p>Similarly, the PSNRs continue to increase, which is a good indication that our model is likely 
+          producing better results.
+        </p>
         <div class="img-container" style="align-items:center; justify-content:center;">
           <img src="2lego/valid_psnr.png" height="250px" alt="cam_conv_dx">
         </div>
+        <p>The resulting gif after 12k training steps:</p>
         <div class="img-container" style="align-items:center; justify-content:center;">
           <img src="2lego/lego.gif" height="250px" alt="cam_conv_dx">
         </div>
@@ -197,25 +212,52 @@
     
     <h3 id="part2.5">Results with Lafufu Dataset</h3>
       <div>
+        <p>We tested our implementation with the provided Lafufu dataset, which included calibration images 
+          and the Lafufu images. Unlike the Lego dataset, we had to calculate the extrinsics and intrinsic matrices ourselves 
+          with the given calibration and Lafufu images. The calculation process is described in Part 2.1.
+        </p>
+        <p>The resulting gif after 10k training steps, using a learning rate of 0.0005, batch size of 10k rays, 
+          near of 0.02, and far of 0.5.
+        </p>
           <div class="img-container" style="align-items:center; justify-content:center;">
             <img src="2img/lafufu.gif" height="230px" alt="cam_conv_dx">
           </div>
-        <p>TODO: some commentary</p>
+        <div class="callout">
+            <strong>Note:</strong> The provided images were quite large (~3MB each), so we resized them down 
+            to roughly 15KB each to reduce the computation workload.
+        </div>
       </div>
 
     <h3 id="part2.6">Results with Bunny Dataset</h3>
       <div>
         <p>And finally, here's the results for my own images I took of my younger sister's 
-          bunny clip! 
+          bunny clip! Like the Lafufu dataset, I had to resize these images down for computation sake. I 
+          did not make any changes to my model for this dataset - I still used a width of 256, batch size of 10k rays, 
+          and learning rate of 0.0005. 
+          I did change the near and far parameters to account for the average camera distance from the ArUco tag, 
+          resulting in a near of 0.02 and far of 0.45.
+          <div class="callout">
+            <strong>Note:</strong> Also for the sake of computation, I kept my sample count as 32 samples per ray, instead of 
+            the recommended. The model will likely produce a better result with using, say, 64 samples per ray, but the 
+            32 samples per ray already produces a fairly decent result.
+          </div>
           <div class="img-container" style="align-items:center; justify-content:center;">
             <img src="2img/bunny.gif" height="230px" alt="cam_conv_dx">
           </div>
         </p>
-        TODO: more commentary
+          Below are the plots for the MSE and PSNR - we can see that they're decreasing and increasing, respectively,
+          indicating that our model is hopefully improving as we do more iterations.
         <p>
           <div class="img-container" style="align-items:center; justify-content:center;">
             <img src="2img/bun_stats.png" height="250px" alt="cam_conv_dx">
           </div>
+        <p>
+            However, looking at the intermediate renderings of a chosen validation image, 
+            we see that we already get a pretty decent result by just iteration 500 
+            (we can make out the tag and the bunny, as well as the turquoise pillow it is on).
+             The tag and bunny become clearer in iterations 3000+, but there's also an extra 
+             pink blob that gets introduced, hm...
+        </p>
           <div class="img-container" style="align-items:center; justify-content:center;">
             <img src="2img/bun_val1.png" height="250px" alt="cam_conv_dx">
           </div>
