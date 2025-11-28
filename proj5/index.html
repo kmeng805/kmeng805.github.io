@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Proj 5</title>
+  <link rel="stylesheet" href="proj5.css">
+
+	<script type="text/x-mathjax-config">
+		MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+	</script>
+	<script type="text/javascript"
+		src="http://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+	</script>
+  <!-- Link to Prism CSS -->
+	<link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+
+	<!-- Link to Prism JS -->
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+
+</head>
+<body>
+  <nav class="sidebar">
+    <br>
+    <h2><a href="../index.html">Home</a></h2>
+    <br>
+    <button id="dark-mode-toggle">Dark Mode</button>
+    <h2>Table of Contents</h2>
+    <ul>
+			<!-- <li><a href="#part1">Overview</a></li> -->
+      <li><a href="#partA">Part A: Power of Diffusion Models</a></li>
+      <li><a href="#part0">Part 0: Playing with DeepFloyd</a></li>
+      <li><a href="#part1">Part 1: Sampling Loops</a>
+        <ul>
+            <li><a href="#part1.1">1.1: Implementing the Forward Process</a></li>
+            <li><a href="#part1.2">1.2: Classical Denoising</a></li>
+            <li><a href="#part1.3">1.3: One-Step Denoising</a></li>
+            <li><a href="#part1.4">1.4: Iterative Denoising</a></li>
+            <li><a href="#part1.5">1.5: Diffusion Model Sampling</a></li>
+            <li><a href="#part1.6">1.6: Classifier-Free Guidance (CFG)</a></li>
+            <li><a href="#part1.7">1.7: Image-to-image Translation</a></li>
+			<li><a href="#part1.7">1.8: Visual Anagrams</a></li>
+			<li><a href="#part1.7">1.9: Hybrid Images</a></li>
+        </ul>
+      </li>
+      <li><a href="#part11">Part B: Flow Matching from Scratch</a></li>
+      
+    </ul>  
+  </nav>
+
+  <div class="main">
+    <h1>Project 5: Fun with Diffusion Models</h1>
+	<div>
+		<!-- <h2 id="part0">Overview</h2>
+	<div class="img-container">
+			<p class="text-desc">todo</p>
+		</div> -->
+		<p style="font-size: 13px; font-style: italic;">
+				*Although this is written in first-person plural (just preference), the project was completed by myself individually.
+		</p>
+	</div>
+
+    <h2 id="partA">Part A: Power of Diffusion Models</h2>
+    <h2 id="part0">Part 0: Playing with DeepFloyd</h2>
+    <div>
+        <p>In Part A of this project, we will be playing around with pretrained diffusion models, specifically DeepFloyd IF, to generate images for tasks of our choosing (e.g. visual anagrams and hybrid images). To familiarize ourselves with the <a href="https://huggingface.co/docs/diffusers/api/pipelines/deepfloyd_if">DeepFloyd IF</a> diffusion model, we start by generating several images using prompts of our choosing.</p>
+		<div class="callout">
+			<strong>Note:</strong> DeepFloyd takes in vector inputs, not the string prompts directly, so we must first obtain the prompt embeddings (from the T5 text encoder).
+		</div>
+		Prompts used:
+		<ol>
+			<li>Prompt 1: <code>“a photo of a person kayaking in a clear lake”</code></li>
+			<li>Prompt 2: <code>“an oil painting of a rainy city sidewalk during twilight”</code></li>
+			<li>Prompt 3: <code>“a photo of many plushies on a bed”</code></li>
+		</ol>
+		<p style="text-align: center;">Image at <code>num_inference_steps=20</code>:</p>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img0/step20.png" width=100% alt="cam_conv_dx">
+		</div>
+		<p style="text-align: center;">Image at <code>num_inference_steps=80</code>:</p>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img0/step80.png" width=100% alt="cam_conv_dx">
+		</div>
+		<p style="text-align: center;">Image at <code>num_inference_steps=120</code>:</p>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img0/step120.png" width=100% alt="cam_conv_dx">
+		</div>
+
+		<p>Overall, the images look relatively good.</p>
+		<p>For the kayak photo, the model's output displayed the "clear lake" portion of the prompt pretty realistically for steps 20 and 120 and gave the most realistic background in step 80. The kayak itself was a bit of an issue though - the paddles are incorrect in the first two images, and the person completely disappears in the third image.</p>
+		<p>For the rainy city sidewalk photo, the image at step 20 looked the most natural (step 80's image has a light hanging from... the sky?), but step 120 has more color, as if it was trying to capture the "during twilight" more.</p>
+		<p>For the plushies photo, I'd argue that the photo at step 80 was the most realistic - the faces in the other images look a bit too scary, and the background in step 120 doesn't really look like a bed.</p>
+
+		<div class="callout">
+			<strong>Note:</strong> For this part and all following parts, I used seed 86.
+		</div>
+    </div>
+
+	<h2 id="part1">Part 1: Sampling Loops</h2>
+	<h3 id="part1.1">1.1: Implementing the Forward Process</a></h3>
+	<div>
+		<p>Given an input image and a timestep, a diffusion model will try to predict how much noise is in the image, which we can use to denoise the input image and (attempt to) recover the original image.</p>
+		<p>In the forward process, we take our clean image and add some noise to it, obtaining our noised image using the following equation:</p>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img1-3/forward.png" height="50px" alt="cam_conv_dx">
+		</div>
+		<p>Below is a picture of the Campanile, as well as its noised version for t in <code>[250, 500, 750]</code>. As t increases, so does the amount of noise in the image.</p>
+		Original Campanile:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img1-3/campanile.png" height="250px" alt="cam_conv_dx">
+		</div>
+		Noised versions:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img1-3/noised.png" height="250px" alt="cam_conv_dx">
+		</div>
+	</div>
+
+	<h3 id="part1.2">1.2: Classical Denoising</a></h3>
+	<div>
+		One idea for denoising is to apply a low-pass filter on the image, but we see that this performs quite poorly, especially as t increases.
+		<p>Results from applying Gaussian blur filtering using a kernel_size of 9 and sigma of 1:</p>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img1-3/gaussed.png" height="500px" alt="cam_conv_dx">
+		</div>
+	</div>
+
+	<h3 id="part1.3">1.3: One-Step Denoising</a></h3>
+	<div>
+		Instead, we can try one-step denoising, which uses our diffusion model to predict the noise in our image, then reverse the equation in Part 1.1 to solve for our original image.
+		<div class="callout">
+			<strong>Note:</strong> DeepFloyd takes in vector inputs corresponding to a prompt, so for now, we will use the default prompt <code>"a high quality photo"</code>.
+		</div>
+		<p>Results from performing one-step denoising for steps t in <code>[250, 500, 750]</code>:</p>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img1-3/one-step_denoised.png" height="250px" alt="cam_conv_dx">
+		</div>
+		<div class="callout">
+			<strong>Note:</strong> The original Campanile photo and noised versions have been displayed above in Part 1.1, so I did not copy them here again to minimize redundancy.
+		</div>
+	</div>
+
+	<h3 id="part1.4">1.4: Iterative Denoising</a></h3>
+	<div>
+		We can apply this one-step denoising idea iteratively, applying one-step denoising to our image 1000 times (since T ranges from 0 to 1000). To reduce the computation and speed the process up, we can actually skip steps!
+		<p>We create a list <code>strided_timesteps</code>, which goes from 990 (larger t means noisier) to 0, with a stride of 30 (width-30 jumps). Then, we apply the following formula for these timesteps to obtain our final denoised image.</p>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img1-3/iter_forward.png" height="50px" alt="cam_conv_dx">
+		</div>
+		<p>Images of the noisy Campanile every 5th loop of denoising:</p>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img1-3/1.4noised.png" height="180px" alt="cam_conv_dx">
+		</div>
+		<p>Comparisons of the original image, iteratively denoised image, one-step denoised image, and low-pass image:</p>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img1-3/1.4res.png" height="200px" alt="cam_conv_dx">
+		</div>
+		<p>We see that the iteratively denoised Campanile looks clearer and more realistic than the one-step denoised Campanile.</p>
+	</div>
+	
+	<h3 id="part1.5">1.5: Diffusion Model Sampling</a></h3>
+	<div>
+		<p>Let's try iteratively denoising some random noise images from scratch! Below are five samples, using the prompt <code>"a high quality photo"</code>:</p>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img56/5.png" height="180px" alt="cam_conv_dx">
+		</div>
+	</div>
+
+	<h3 id="part1.6">1.6: Classifier-Free Guidance (CFG)</a></h3>
+	<div>
+		<p>The images from part 1.5 look somewhat reasonable, but they don't look great. To improve the results, we use Classifier-Free Guidance (CFG), which generates conditional noise on the prompt.</p>
+		<p>We use the following formula to compute noise, then substitute that into our equation in Part 1.4. $ε_u$ and $ε_c$ are the unconditional and conditional noise estimates (respectively) obtained from our diffusion model</p>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img56/cfg.png" height="30px" alt="cam_conv_dx">
+		</div>
+		<div class="callout">
+			<strong>Note:</strong> We used γ = 7 and <code>""</code> for our unconditional prompt.
+		</div>
+		<p>Below are results, with <code>"a high quality photo"</code> as our conditional prompt:</p>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img56/6.png" height="180px" alt="cam_conv_dx">
+		</div>
+	</div>
+
+	<h3 id="part1.7">1.7: Image-to-image Translation</a></h3>
+	<div>
+		We experiment with the iterative denoising using CFG from Part 1.6, except we add using our forward process from Part 1.1, with different noise levels (<code>[1, 3, 5, 7, 10, 20]</code>). We use <code>"a high quality photo"</code> as our conditional text prompt.
+		<p>Example with Campanile image:</p>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img7/camp_res.png" height="140px" alt="cam_conv_dx">
+		</div>
+		<p>Example with Ikea Shark image:</p>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img7/shark.png" height="140px" alt="cam_conv_dx">
+		</div>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img7/shark_res.png" height="140px" alt="cam_conv_dx">
+		</div>
+		<p>Example with Christmas house image:</p>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img7/house.png" height="140px" alt="cam_conv_dx">
+		</div>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img7/house_res.png" height="140px" alt="cam_conv_dx">
+		</div>
+		As our starting noise level increases, we see that the picture looks more and more like the original. For every level, we're noising the image, then forcing it back onto the image manifold using a default conditional text prompt (i.e. without prompting it to look like the Campanile).
+	</div>
+
+	<h4 id="part1.7">1.7.1: Editing Hand-Drawn and Web Images</a></h4>
+	<div>
+		We perform the same experiment with hand-drawn and (more) web images.
+		<p>Example with Octopus image:</p>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img7/octo.png" height="140px" alt="cam_conv_dx">
+		</div>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img7/octo_res.png" height="140px" alt="cam_conv_dx">
+		</div>
+		<p>Example with Handrawn image #1:</p>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img7/dude.png" height="140px" alt="cam_conv_dx">
+		</div>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img7/dude_res.png" height="140px" alt="cam_conv_dx">
+		</div>
+		<p>Example with Handrawn image #2:</p>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img7/tree.png" height="140px" alt="cam_conv_dx">
+		</div>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img7/tree_res.png" height="140px" alt="cam_conv_dx">
+		</div>
+	</div>
+
+	<h4 id="part1.7">1.7.2: Inpainting</a></h4>
+	<div>
+		We can also use diffusion models for inpainting, filling in a hole in an image. The equation is as follows, where m is our mask (we force all masked out pixels to be equal to the original image's value).
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img7/inpaint.png" height="40px" alt="cam_conv_dx">
+		</div>
+		<p>Inpainting with the Campanile:</p>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img7/camp_mask.png" height="200px" alt="cam_conv_dx">
+		</div>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img7/camp_mask_res.png" height="200px" alt="cam_conv_dx">
+		</div>
+		<p>Inpainting with a Rainbow:</p>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img7/rainbow_mask.png" height="200px" alt="cam_conv_dx">
+		</div>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img7/rainbow_mask_res.png" height="200px" alt="cam_conv_dx">
+		</div>
+		<p>Inpainting with a Cabin in the Woods:</p>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img7/cabin_mask.png" height="200px" alt="cam_conv_dx">
+		</div>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img7/cabin_mask_res.png" height="200px" alt="cam_conv_dx">
+		</div>
+	</div>
+
+	<h4 id="part1.7">1.7.3: Text-Conditional Image-to-image Translation</a></h4>
+	<div>
+		Now, instead of simply using a default prompt, we use a specific prompt to guide the image generation. At low 
+		noise levels (i.e. high amount of added noise), we should expect the image to look more like the prompt, and 
+		at high noise levels, we should expect the image to look more like the original, but still have features of the prompt.
+		<div class="callout">
+			<strong>Note:</strong> The images are displayed for noise levels <code>[1, 3, 5, 7, 10, 20]</code>, in that order.
+		</div>
+		<p>Campanile with prompt "a photo of mountains with a starry night sky"</p>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img7/camp_night.png" height="140px" alt="cam_conv_dx">
+		</div>
+		<p>Bear with prompt "a picture of a leaping deer"</p>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img7/bear.png" height="200px" alt="cam_conv_dx">
+		</div>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img7/bear_prompt.png" height="140px" alt="cam_conv_dx">
+		</div>
+		<p>Wreath with prompt "a photo of a berry bush"</p>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img7/wreath.png" height="200px" alt="cam_conv_dx">
+		</div>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img7/wreath_prompt.png" height="140px" alt="cam_conv_dx">
+		</div>
+	</div>
+
+
+	<h3 id="part1.8">1.8: Visual Anagrams</a></h3>
+	<div>
+		We attempt to create visual anagrams, specifically images that look like two different scenes when looked at from right-side up and upside-down. To do so, we use two prompts, $p_1$ and $p_2$, and vertically flip the image $x_t$ and noise ($ε_2$) associated with the second prompt to obtain the noise:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img89/8eq.png" height="100px" alt="cam_conv_dx">
+		</div>
+		<p>We use this noise in the equation in Part 1.4 to obtain visual anagrams.</p>
+		<p style="text-align: center;">Example 1: Deers n' Fruit Baskets</p>
+		<div class="image-grid-2" style="align-items:center; justify-content:center;">
+			<div class="image-item">
+				<p class="image-label">Prompt 1: "a picture of a steel wire fruit basket"</p>
+				<img src="img89/basket.png" height="140px" alt="box">
+			</div>
+			<div class="image-item">
+				<p class="image-label">Prompt 2: "a picture of a leaping deer"</p>
+				<img src="img89/deer.png" height="140px" alt="box">
+			</div>
+		</div>
+		<p style="text-align: center;">Example 2: Ice Cream n' Gnomes</p>
+		<div class="image-grid-2" style="align-items:center; justify-content:center;">
+			<div class="image-item">
+				<p class="image-label">Prompt 1: "a picture of an ice cream cone"</p>
+				<img src="img89/icecream.png" height="140px" alt="box">
+			</div>
+			<div class="image-item">
+				<p class="image-label">Prompt 2: "a picture of a gnome"</p>
+				<img src="img89/gnome.png" height="140px" alt="box">
+			</div>
+		</div>
+	</div>
+	<h3 id="part1.9">1.9: Hybrid Images</a></h3>
+	<div>
+		We attempt to create hybrid images, which look like two different scenes when viewed from afar and up close. To do so, we again use two prompts, $p_1$ and $p_2$, and apply lowpass and highpass filters to the noises:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="img89/9eq.png" height="100px" alt="cam_conv_dx">
+		</div>
+		<div class="callout">
+			<strong>Note:</strong> For our low-pass filter, we used kernel_size = 33 and sigma = 2. The high-pass filter is obtained by subtracting the low-pass result from the original.
+		</div>
+		<p>Similar to Part 1.8, we'll use this noise in the equation in Part 1.4 to obtain hybrid images. For fun, I've included two results per hybrid image</p>
+		<p style="text-align: center;">Example 1: Mountains in the Turkey (not turkey in the mountains!)</p>
+		<ul>
+			<li>Prompt 1: "a drawing of a turkey" (low frequency)</li>
+			<br>
+			<li>Prompt 2: "a photo of mountains with a starry night sky" (high frequency)</li>
+		</ul>
+		<div class="image-grid-2" style="align-items:center; justify-content:center;">
+			<div class="image-item">
+				<p class="image-label">Version 1</p>
+				<img src="img89/turk1.png" height="140px" alt="box">
+			</div>
+			<div class="image-item">
+				<p class="image-label">Version 2</p>
+				<img src="img89/turk2.png" height="140px" alt="box">
+			</div>
+		</div>
+		<p>The first image preserves the "starry night sky" (in hindsight this probably was not a good choice to go with the turkey prompt), but the second image has a cooler looking turkey :)</p>
+		<p style="text-align: center;">Example 2: Yummy Colosseum</p>
+		<ul>
+			<li>Prompt 1: "a photo of a round cake" (low frequency)</li>
+			<br>
+			<li>Prompt 2: "a photo of the Colosseum" (high frequency)</li>
+		</ul>
+		<div class="image-grid-2" style="align-items:center; justify-content:center;">
+			<div class="image-item">
+				<p class="image-label">Version 1</p>
+				<img src="img89/cake1.png" height="140px" alt="box">
+			</div>
+			<div class="image-item">
+				<p class="image-label">Version 2</p>
+				<img src="img89/cake2.png" height="140px" alt="box">
+			</div>
+		</div>
+		<p>The first image has a nicer shape, but the glaze on the second image blends well with the walls of the Colosseum, which I found to be pretty cool.</p>
+	</div>
+
+               
+
+</div>
+  
+<script src="script.js"></script>
+
+</body>
+</html>
