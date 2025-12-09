@@ -44,7 +44,21 @@
         </ul>
       </li>
       <li><a href="#partB">Part B: Flow Matching from Scratch</a></li>
-      
+	  <li><a href="#partB1">Part 1: Training a Single-Step Denoising UNet</a></li>
+	  <ul>
+            <li><a href="#partB1.1">1.1: Implementing the UNet</a></li>
+            <li><a href="#partB1.2">1.2: Using the UNet to Train a Denoiser</a></li>
+        </ul>
+      <li><a href="#partB2">Part 2: Training a Flow Matching Model</a>
+        <ul>
+            <li><a href="#partB2.1">2.1: Adding Time Conditioning to UNet</a></li>
+            <li><a href="#partB2.2">2.2: Training the UNet</a></li>
+            <li><a href="#partB2.3">2.3: Sampling from the UNet</a></li>
+            <li><a href="#partB2.4">2.4: Adding Class-Conditioning to UNet</a></li>
+            <li><a href="#partB2.5">2.5: Training the UNet</a></li>
+            <li><a href="#partB2.6">2.6: Sampling from the UNet</a></li>
+        </ul>
+      </li>
     </ul>  
   </nav>
 
@@ -243,7 +257,6 @@
 		</div>
 		<div class="img-container" style="align-items:center; justify-content:center;">
 			<img src="img7/camp_mask_res.png" height="200px" alt="cam_conv_dx">
-			<img src="img7/camp_mask_res2.png" height="200px" alt="cam_conv_dx">
 		</div>
 		<p>Inpainting with a Rainbow:</p>
 		<div class="img-container" style="align-items:center; justify-content:center;">
@@ -366,7 +379,233 @@
 		<p>The first image has a nicer shape, but the glaze on the second image blends well with the walls of the Colosseum, which I found to be pretty cool.</p>
 	</div>
 
-               
+	<h2 id="partB">Part B: Flow Matching from Scratch</a></h2>
+	<h3 id="partB1">Part 1: Training a Single-Step Denoising UNet</a></h3>
+	<div>
+		Back in Part A, we used pretrained diffusion models. Now in Part B, we'll build and train our own UNet (on the MNIST dataset).
+	</div>
+	<h3 id="partB1.1">1.1: Implementing the UNet</a></h3>
+	<div>
+		We implement the (unconditional) UNet model with the below architecture, which takes in a noised image as input, and outputs the denoised image (a number from 0-9, as represented in the MNIST dataset). 
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/unet_arch.png" height="300px" alt="cam_conv_dx">
+		</div>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/unet_arch2.png" height="200px" alt="cam_conv_dx">
+		</div>
+	</div>
+
+	<h3 id="partB1.2">1.2: Using the UNet to Train a Denoiser</a></h3>
+	<div>
+		As mentioned earlier, we train our UNet model on the MNIST dataset, consisting of images of numbers 0-9. To train our model, we use the following formula to generate noisy images, where σ = noise level:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/1.2.noise.png" height="30px" alt="cam_conv_dx">
+		</div>
+		Visualization of noising process, using noise levels from $[0.0, 0.2, 0.4, 0.5, 0.6, 0.8, 1.0]$:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/1.2a.png" height="130px" alt="cam_conv_dx">
+		</div>
+	</div>
+
+	<h4>1.2.1: Training</a></h4>
+	<div>
+		We trained our model with the following hyperparameters:
+		<ul>
+			<li>Batch size: 256</li>
+			<li>Hidden dimension ("D" in the architecture diagram): 128</li>
+			<li>Learning rate: 1e-4</li>
+			<li>Optimizer: Adam</li>
+			<li>Noise level (σ): 0.5</li>
+			<li>Epochs: 5</li>
+			<li>Loss: L2 loss comparing the clean image with the model's output (using a noised image as input)
+				<div class="img-container" style="align-items:center; justify-content:center;">
+					<img src="imgB/1.2/1.2.loss.png" height="30px" alt="cam_conv_dx">
+				</div>
+			</li>
+		</ul>
+		Model results after training for 1 epoch:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/1.2.1_0.png" height="400px" alt="cam_conv_dx">
+		</div>
+		Model results after training for 5 epochs:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/1.2.1_5.png" height="400px" alt="cam_conv_dx">
+		</div>
+		<div class="callout">
+			<strong>Note:</strong> In the results, Epoch 0 corresponds to the first epoch, and Epoch 4 corresponds to the fifth.
+		</div>
+		As expected, we see an improvement in the later epochs. We can also verify this by checking that the MSE loss decreases.
+		Model training loss:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/1.2.1_mse.png" height="300px" alt="cam_conv_dx">
+		</div>
+	</div>
+
+	<h4>1.2.2: Out-of-Distribution Testing</a></h4>
+	<div>
+		Previously, we trained using a set noise level of 0.5. We experimented with using different noise levels in $[0.0, 0.2, 0.4, 0.5, 0.6, 0.8, 1.0]$, as shown below. As expected, when the noise level is higher, the prediction looks less like the actual number.
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/1.2.2.png" height="260px" alt="cam_conv_dx">
+		</div>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/1.2.2a.png" height="260px" alt="cam_conv_dx">
+		</div>
+	</div>
+
+	<h4>1.2.3: Denoising Pure Noise</a></h4>
+	<div>
+		Instead of using noised versions of the MNIST dataset as our input, we try denoising pure noise (sampled from N(0, 1)), making our task generative:
+		Model results after training for 1 epoch:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/1.2.3a.png" height="450px" alt="cam_conv_dx">
+		</div>
+		Model results after training for 5 epochs:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/1.2.3b.png" height="450px" alt="cam_conv_dx">
+		</div>
+
+		Loss curve:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/1.2.3c.png" height="260px" alt="cam_conv_dx">
+		</div>
+		<div class="callout">
+			<strong>Note:</strong> We see that the model tends to predict the same shape when the input is pure noise. Because the model is given an input that doesn't really give it any information about what the number may be, the model will strive to minimize the loss, which in this case is the average of all the images and is thus what we see in the image outputs.
+		</div>
+	</div>
+
+	<h2 id="partB">Part 2: Training a Flow Matching Model</a></h2>
+	<div>
+		Part B.1 was similar to the one-step denoising from Part A, where we saw that one-step denoising didn't perform as well as making small incremental denoising steps. 
+		<p>In Part B.2, we will now train our UNet model for flow matching, predicting the flow from the noisy images to clean images.</p>
+		<p>To construct our noisy image inputs, we use the below formula:</p>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/flow1.png" height="25px" alt="cam_conv_dx">
+		</div>
+		Our UNet model will now predict the flow:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/flow2.png" height="40px" alt="cam_conv_dx">,
+			<img src="imgB/1.2/flow3.png" height="30px" alt="cam_conv_dx">
+		</div>
+	</div>
+
+	<h3 id="partB2.1">2.1: Adding Time Conditioning to UNet</a></h3>
+	<div>
+		To modify our original (unconditioned) UNet model, we inject our time t through two FCBlocks, multiplying the corresponding existing blocks with the FCBlock outputs:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/flow_arch.png" height="300px" alt="cam_conv_dx">
+		</div>
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/flow_arch2.png" height="120px" alt="cam_conv_dx">
+		</div>
+	</div>
+
+	<h3 id="partB2.2">2.2: Training the UNet</a></h3>
+	<div>
+		To train the time-conditioned UNet, we use the following algorithm, generating noised samples and evaluating our model's prediction of the flow:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/2.2alg.png" height="200px" alt="cam_conv_dx">
+		</div>
+		We trained our model with the following hyperparameters:
+		<ul>
+			<li>Batch size: 64</li>
+			<li>Hidden dimension ("D" in the architecture diagram): 64</li>
+			<li>Learning rate: 1e-2</li>
+			<li>Optimizer: Adam</li>
+			<li>Epochs: 10</li>
+			<li>Loss: L2 loss comparing the clean image with the model's output (using a noised image as input)</li>
+			<li>Learning rate scheduler: <code>torch.optim.lr_scheduler.ExponentialLR</code>, with γ = $0.1^{1.0/num\_epochs}$</li>
+		</ul>
+		Model's training loss:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/2.3.mse.png" height="300px" alt="cam_conv_dx">
+		</div>
+	</div>
+
+	<h3 id="partB2.3">2.3: Sampling from the UNet</a></h3>
+	<div>
+		To sample test outputs from the time-conditioned UNet, we use the following algorithm:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/2.3alg.png" height="200px" alt="cam_conv_dx">
+		</div>
+		Model results after training for 1 epoch:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/2.3.0.png" height="240px" alt="cam_conv_dx">
+		</div>
+		Model results after training for 5 epochs:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/2.3.4.png" height="240px" alt="cam_conv_dx">
+		</div>
+		Model results after training for 10 epochs:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/2.3.9.png" height="240px" alt="cam_conv_dx">
+		</div>
+		We get pretty reasonable results, though it could be better!
+	</div>
+
+	<h3 id="partB2.4">2.4: Adding Class-Conditioning to UNet</a></h3>
+	<div>
+		The results from the basic time-conditioned UNet were good, but they still looked slightly ambiguous in terms of which number they represented. 
+		To improve our results, we can add class-conditioning, where the digits 0-9 represent the ten classes.
+		<p>The class is represented as a one-hot vector.</p>
+		<div class="callout">
+			<strong>Note:</strong> To allow for our model to work without conditioning, we incorporate dropout, where our class vector is 0 p% of the time. We use p = 10.
+		</div>
+	</div>
+
+	<h3 id="partB2.5">2.5: Training the UNet</a></h3>
+	<div>
+		To train the class-conditioned UNet, we use the following algorithm, generating noised samples and evaluating our model's prediction of the flow:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/2.5alg.png" height="200px" alt="cam_conv_dx">
+		</div>
+		The model was trained using the same hyperparameters as 2.2, with the additional hyperparameter of γ = 0.5.
+		Model training loss:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/2.5.mse.png" height="300px" alt="cam_conv_dx">
+		</div>
+	</div>
+
+	<h3 id="partB2.6">2.6: Sampling from the UNet</a></h3>
+	<div>
+		To sample our output images from the class-conditioned UNet, we use the following algorithm:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/2.6alg.png" height="200px" alt="cam_conv_dx">
+		</div>
+		Model results after training for 1 epoch:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/2.5.a.png" height="240px" alt="cam_conv_dx">
+		</div>
+		Model results after training for 5 epochs:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/2.5.b.png" height="240px" alt="cam_conv_dx">
+		</div>
+		Model results after training for 10 epochs:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/2.5.c.png" height="240px" alt="cam_conv_dx">
+		</div>
+	</div>
+	<h3>Extra: Eliminating the Learning Rate Scheduler</a></h3>
+	<div>
+		We've been using a learning rate throughout our training process, so we attempted to train our model (from Part 2.5) without the learning rate scheduler.
+		We lowered the learning rate from 1e-2 to 6e-3 to compensate, and our model still performed quite well:
+		<p></p>
+		Model results after training for 1 epoch:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/2.6.a.png" height="240px" alt="cam_conv_dx">
+		</div>
+		Model results after training for 5 epochs:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/2.6.b.png" height="240px" alt="cam_conv_dx">
+		</div>
+		Model results after training for 10 epochs:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/2.6.c.png" height="240px" alt="cam_conv_dx">
+		</div>
+		Model training loss:
+		<div class="img-container" style="align-items:center; justify-content:center;">
+			<img src="imgB/1.2/2.6.mse.png" height="240px" alt="cam_conv_dx">
+		</div>
+	</div>
 
 </div>
   
